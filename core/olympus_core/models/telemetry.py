@@ -44,12 +44,17 @@ class GpuTelemetry(BaseModel):
     temperature_celsius: float | None = None
 
 
+class GameInfo(BaseModel):
+    id: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=128)
+
+
 class ActivityTelemetry(BaseModel):
     mode: ActivityMode
     application: str | None = None
     process_name: str | None = None
-
-
+    game: GameInfo | None = None
+    fps: float | None = Field(default=None, gt=0)
 class AgentTelemetry(BaseModel):
     type: Literal["telemetry"]
     system: SystemTelemetry

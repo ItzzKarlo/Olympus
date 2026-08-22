@@ -15,6 +15,7 @@ from olympus_core.models.telemetry import (
     ActivityMode,
     ActivityTelemetry,
     GpuTelemetry,
+    GameInfo,
     NetworkTelemetry,
     StorageTelemetry,
     SystemTelemetry,
@@ -37,6 +38,12 @@ class MachineState(BaseModel):
     activity: ActivityTelemetry | None
 
 
+class GamingState(BaseModel):
+    game: GameInfo
+    session_started_at: datetime
+    fps: float | None = None
+
+
 class OlympusState(BaseModel):
     mode: ActivityMode
     active_device: str | None
@@ -47,6 +54,7 @@ class OlympusState(BaseModel):
     services: dict[str, ServiceState] = Field(default_factory=dict)
     alerts: list[ActiveAlert] = Field(default_factory=list)
     recoveries: list[RecoveryNotice] = Field(default_factory=list)
+    gaming: GamingState | None = None
 
 
 class DisplayState(OlympusState):

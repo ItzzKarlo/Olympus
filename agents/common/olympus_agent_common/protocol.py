@@ -6,13 +6,25 @@ from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
+class GameObservation:
+    id: str
+    name: str
+
+    def as_dict(self) -> dict[str, str]:
+        return asdict(self)
+
+
+@dataclass(frozen=True, slots=True)
 class ActivityObservation:
     mode: str
     application: str | None = None
     process_name: str | None = None
+    game: GameObservation | None = None
+    fps: float | None = None
 
-    def as_dict(self) -> dict[str, str | None]:
-        return asdict(self)
+    def as_dict(self) -> dict[str, Any]:
+        value = asdict(self)
+        return {key: item for key, item in value.items() if item is not None}
 
 
 def build_hello(

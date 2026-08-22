@@ -5,7 +5,7 @@ from olympus_core.models.media import MediaState, MediaTrack
 from olympus_core.models.telemetry import ActivityMode
 from olympus_core.services.media import MediaStateStore
 from olympus_core.services.state import StateService
-from tests.test_registry import hello, telemetry
+from tests.test_registry import gaming_telemetry, hello, telemetry
 
 
 def playback(is_playing: bool = True) -> MediaState:
@@ -52,6 +52,33 @@ class ModeResolverTests(unittest.TestCase):
         self.registry.update("mac-test", telemetry("development"))
         self.registry.disconnect("mac-test")
         self.assertEqual(self.state.current().mode, ActivityMode.MEDIA)
+
+    def test_gaming_overrides_development_and_media(self) -> None:
+        self.media.update(playback())
+        self.registry.register(hello("dev-test"))
+        self.registry.update("dev-test", telemetry("development"))
+        self.registry.register(hello("win-test"))
+        self.registry.update("win-test", gaming_telemetry())
+
+        state = self.state.current()
+        self.assertEqual(state.mode, ActivityMode.GAMING)
+        self.assertEqual(state.active_device, "win-test")
+        self.assertEqual(state.gaming.game.id, "fortnite")
+
+    def test_game_closes_to_development_then_media_then_idle(self) -> None:
+        self.media.update(playback())
+        self.registry.register(hello("dev-test"))
+        self.registry.update("dev-test", telemetry("development"))
+        self.registry.register(hello("win-test"))
+        self.registry.update("win-test", gaming_telemetry())
+        self.registry.update("win-test", telemetry("idle"))
+        self.assertEqual(self.state.current().mode, ActivityMode.DEVELOPMENT)
+
+        self.registry.update("dev-test", telemetry("idle"))
+        self.assertEqual(self.state.current().mode, ActivityMode.MEDIA)
+
+        self.media.update(playback(False))
+        self.assertEqual(self.state.current().mode, ActivityMode.IDLE)
 
 
 if __name__ == "__main__":

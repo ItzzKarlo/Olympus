@@ -19,6 +19,21 @@ class ModeResolver:
         agents: list[RegisteredAgent],
         media: MediaState | None,
     ) -> ModeResolution:
+        gaming_agents = [
+            agent
+            for agent in agents
+            if agent.online
+            and agent.activity is not None
+            and agent.activity.mode == ActivityMode.GAMING
+            and agent.activity.game is not None
+        ]
+        if gaming_agents:
+            active = max(
+                gaming_agents,
+                key=lambda agent: (agent.last_seen, agent.agent_id),
+            )
+            return ModeResolution(ActivityMode.GAMING, active.agent_id)
+
         development_agent = next(
             (
                 agent

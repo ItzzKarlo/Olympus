@@ -4,6 +4,8 @@ from typing import Any
 import psutil
 
 from olympus_agent.activity import detect_development_activity
+from olympus_agent.game_profiles import LINUX_GAME_PROFILES
+from olympus_agent_common.games import ProcessInfo, detect_running_game
 from olympus_agent_common.telemetry import build_telemetry, optional_section
 
 
@@ -34,6 +36,25 @@ def collect_telemetry() -> dict[str, Any]:
         cpu_celsius=normalize_cpu_temperature(sensor_readings),
         gpu_celsius=None,
     )
+    raw_processes: list[Any] = []
+    game_processes: list[ProcessInfo] = []
+    for process in psutil.process_iter(["pid", "name", "cmdline"]):
+        raw_processes.append(process)
+        try:
+            info = process.info
+            if info.get("name") and isinstance(info.get("pid"), int):
+                game_processes.append(
+                    ProcessInfo(
+                        info["pid"],
+                        info["name"],
+                        tuple(info.get("cmdline") or ()),
+                    )
+                )
+        except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
+            continue
+    activity = detect_running_game(game_processes, LINUX_GAME_PROFILES)
+    if activity is None:
+        activity = detect_development_activity(raw_processes)
     return build_telemetry(
         system={
             "cpu_percent": psutil.cpu_percent(interval=None),
@@ -52,5 +73,5 @@ def collect_telemetry() -> dict[str, Any]:
             "bytes_received": network.bytes_recv,
         },
         temperatures=temperatures,
-        activity=detect_development_activity().as_dict(),
+        activity=activity.as_dict(),
     )

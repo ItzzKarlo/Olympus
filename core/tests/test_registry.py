@@ -35,6 +35,23 @@ def telemetry(mode: str = "idle") -> AgentTelemetry:
     )
 
 
+def gaming_telemetry(
+    game_id: str = "fortnite",
+    game_name: str = "Fortnite",
+    fps: float | None = None,
+) -> AgentTelemetry:
+    value = telemetry("gaming").model_dump(mode="json")
+    value["activity"].update(
+        {
+            "application": game_name,
+            "process_name": f"{game_id}.exe",
+            "game": {"id": game_id, "name": game_name},
+            "fps": fps,
+        }
+    )
+    return AgentTelemetry.model_validate(value)
+
+
 class AgentRegistryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.registry = AgentRegistry()

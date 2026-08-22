@@ -14,4 +14,5 @@ class AgentConfig(CommonAgentConfig):
             telemetry_interval=common.telemetry_interval,
             reconnect_delay=common.reconnect_delay,
             identity_path=common.identity_path,
+            game_background_grace_seconds=common.game_background_grace_seconds,
         )
