@@ -1,3 +1,5 @@
+from collections.abc import Awaitable, Callable
+
 from pydantic import ValidationError
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
@@ -9,7 +11,11 @@ from olympus_core.models.telemetry import AgentTelemetry
 POLICY_VIOLATION = 1008
 
 
-async def handle_agent_socket(websocket: WebSocket, registry: AgentRegistry) -> None:
+async def handle_agent_socket(
+    websocket: WebSocket,
+    registry: AgentRegistry,
+    publish_state: Callable[[], Awaitable[None]],
+) -> None:
     await websocket.accept()
     agent_id: str | None = None
     connection_id: str | None = None
@@ -25,6 +31,7 @@ async def handle_agent_socket(websocket: WebSocket, registry: AgentRegistry) -> 
         _, connection_id = registry.register(hello)
         welcome = AgentWelcome(agent_id=agent_id)
         await websocket.send_json(welcome.model_dump(mode="json"))
+        await publish_state()
 
         while True:
             try:
@@ -36,8 +43,10 @@ async def handle_agent_socket(websocket: WebSocket, registry: AgentRegistry) -> 
                 )
                 return
             registry.update(agent_id, telemetry, connection_id)
+            await publish_state()
     except WebSocketDisconnect:
         pass
     finally:
         if agent_id is not None:
             registry.disconnect(agent_id, connection_id)
+            await publish_state()

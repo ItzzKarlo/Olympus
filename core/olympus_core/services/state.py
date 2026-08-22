@@ -1,5 +1,7 @@
+from datetime import datetime, timezone
+
 from olympus_core.agents.registry import AgentRegistry
-from olympus_core.models.state import MachineState, OlympusState
+from olympus_core.models.state import DisplayState, MachineState, OlympusState
 from olympus_core.models.telemetry import ActivityMode
 
 
@@ -31,11 +33,22 @@ class StateService:
             active_device=active_device,
             machines={
                 agent.agent_id: MachineState(
+                    agent_id=agent.agent_id,
                     hostname=agent.hostname,
+                    platform=agent.platform,
+                    platform_version=agent.platform_version,
                     online=agent.online,
+                    last_seen=agent.last_seen,
                     system=agent.system,
                     activity=agent.activity,
                 )
                 for agent in agents
             },
+        )
+
+    def display_state(self) -> DisplayState:
+        state = self.current()
+        return DisplayState(
+            **state.model_dump(),
+            generated_at=datetime.now(timezone.utc),
         )

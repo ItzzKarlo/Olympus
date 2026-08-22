@@ -26,6 +26,8 @@ class StateServiceTests(unittest.TestCase):
 
         self.assertEqual(state.mode, ActivityMode.DEVELOPMENT)
         self.assertEqual(state.active_device, "mac-test")
+        self.assertEqual(state.machines["mac-test"].agent_id, "mac-test")
+        self.assertEqual(state.machines["mac-test"].platform, "macos")
 
     def test_idle_agent_does_not_set_development_mode(self) -> None:
         self.registry.register(hello())
@@ -42,6 +44,28 @@ class StateServiceTests(unittest.TestCase):
 
         self.assertEqual(state.mode, ActivityMode.IDLE)
         self.assertIsNone(state.active_device)
+        self.assertFalse(state.machines["mac-test"].online)
+
+    def test_display_state_is_typed_and_contains_registered_machines(self) -> None:
+        self.registry.register(hello())
+        self.registry.update("mac-test", telemetry("development"))
+
+        state = self.state.display_state()
+
+        self.assertEqual(state.type, "state")
+        self.assertEqual(state.mode, ActivityMode.DEVELOPMENT)
+        self.assertEqual(state.active_device, "mac-test")
+        self.assertIn("mac-test", state.machines)
+        self.assertIsNotNone(state.generated_at.tzinfo)
+
+    def test_disconnected_agent_changes_display_state_to_idle(self) -> None:
+        self.registry.register(hello())
+        self.registry.update("mac-test", telemetry("development"))
+        self.registry.disconnect("mac-test")
+
+        state = self.state.display_state()
+
+        self.assertEqual(state.mode, ActivityMode.IDLE)
         self.assertFalse(state.machines["mac-test"].online)
 
 

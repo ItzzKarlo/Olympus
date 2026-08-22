@@ -1,5 +1,5 @@
 from olympus_core.models.agent import AgentHello, AgentWelcome, RegisteredAgent
-from olympus_core.models.state import MachineState, OlympusState
+from olympus_core.models.state import DisplayState, MachineState, OlympusState
 from olympus_core.models.telemetry import (
     ActivityMode,
     ActivityTelemetry,
@@ -13,6 +13,7 @@ __all__ = [
     "AgentHello",
     "AgentTelemetry",
     "AgentWelcome",
+    "DisplayState",
     "MachineState",
     "OlympusState",
     "RegisteredAgent",
