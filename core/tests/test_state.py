@@ -17,6 +17,14 @@ class StateServiceTests(unittest.TestCase):
         self.assertEqual(state.mode, ActivityMode.IDLE)
         self.assertIsNone(state.active_device)
         self.assertEqual(state.machines, {})
+        self.assertEqual(state.timezone, "UTC")
+        self.assertIsNone(state.weather)
+        self.assertIsNone(state.calendar)
+
+    def test_ambient_context_does_not_create_a_primary_mode(self) -> None:
+        state = StateService(self.registry, timezone="Europe/Berlin").current()
+        self.assertEqual(state.mode, ActivityMode.IDLE)
+        self.assertEqual(state.timezone, "Europe/Berlin")
 
     def test_online_development_agent_sets_development_mode(self) -> None:
         self.registry.register(hello())

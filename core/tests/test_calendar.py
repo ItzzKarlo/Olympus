@@ -89,6 +89,26 @@ class CalendarNormalizationTests(unittest.TestCase):
         self.assertFalse(disabled.calendar.enabled)
         self.assertFalse(enabled.calendar.configured)
 
+    def test_configures_multiple_calendars_from_toml_and_secrets_from_environment(self) -> None:
+        with patch.dict(os.environ, {
+            "OLYMPUS_GOOGLE_CLIENT_ID": "client",
+            "OLYMPUS_GOOGLE_CLIENT_SECRET": "secret",
+            "OLYMPUS_GOOGLE_REFRESH_TOKEN": "refresh",
+        }, clear=True):
+            config = parse_core_config({
+                "olympus": {"timezone": "Europe/Berlin"},
+                "calendar": {
+                    "enabled": True,
+                    "calendar_ids": ["primary", "work"],
+                    "lookahead_days": 14,
+                    "poll_minutes": 6,
+                },
+            })
+        self.assertTrue(config.calendar.configured)
+        self.assertEqual(config.calendar.calendar_ids, ("primary", "work"))
+        self.assertEqual(config.calendar.lookahead_days, 14)
+        self.assertEqual(config.calendar.poll_seconds, 360)
+
 
 class CalendarApiTests(unittest.IsolatedAsyncioTestCase):
     async def test_refreshes_auth_merges_calendars_expands_instances_and_orders(self) -> None:

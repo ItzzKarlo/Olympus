@@ -177,7 +177,7 @@ class LocalIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 "test-agent",
                 "windows",
                 "11",
-                "0.6.0",
+                "0.7.0",
                 collect,
                 self.server,
             ))

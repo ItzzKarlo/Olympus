@@ -67,6 +67,15 @@ class WeatherNormalizationTests(unittest.TestCase):
         self.assertFalse(config.weather.configured)
         self.assertEqual(parse_core_config({}).timezone, "UTC")
 
+    def test_configures_coordinates_polling_and_timezone(self) -> None:
+        config = parse_core_config({
+            "olympus": {"timezone": "Europe/Zagreb"},
+            "weather": {"enabled": True, "latitude": 45.815, "longitude": 15.982, "poll_minutes": 12},
+        })
+        self.assertTrue(config.weather.configured)
+        self.assertEqual(config.weather.timezone, "Europe/Zagreb")
+        self.assertEqual(config.weather.poll_seconds, 720)
+
 
 class WeatherApiTests(unittest.IsolatedAsyncioTestCase):
     async def test_open_meteo_request_and_response(self) -> None:

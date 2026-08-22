@@ -78,17 +78,15 @@ Agents send this information to the Olympus Core.
 ## Architecture
 
 ```text
-macOS / Windows / Linux Agents
-             │
-             │ /ws/agents
-             ▼
-        Olympus Core ─────────/ws/display────────> Display
-             │                                      │
-             ├─ mode + media state                   ├─ active scene
-             ├─ Core host awareness                  └─ event overlays
-             ├─ LAN / Internet diagnostics
-             ├─ target + service monitors
-             └─ active incidents + recoveries
+Agents · Spotify · Weather · Google Calendar
+Network/service monitors · Local app integrations
+                         │
+                         ▼
+                    Olympus Core
+                         │
+                         │ /ws/display
+                         ▼
+                       Display
 ```
 
 Optional local application observers join the same path without bypassing the
@@ -98,7 +96,7 @@ machine Agent:
 Minecraft + Fabric observer → localhost Agent → Core → Display
 ```
 
-Olympus v0.6 implements this full local path. Agents own device-specific
+Olympus v0.7 implements this full local path. Agents own device-specific
 observation, Core owns interpretation and monitoring, and the Display consumes
 only Core's normalized state.
 
@@ -263,6 +261,104 @@ Credentials and tokens remain in the ignored `core/.env` file. If Spotify is
 temporarily unreachable, Core keeps the last good playback state briefly and
 continues serving agents and displays normally. If Spotify later reports an
 expired or revoked refresh token, rerun the authorization helper.
+
+## Ambient Idle
+
+Idle is Olympus' calm room overview. It keeps the timezone-aware clock and date
+visually dominant, then adds optional current Weather, a short forecast, the
+next relevant Calendar event, and limited Today/Tomorrow schedules. Approaching
+events receive restrained emphasis without becoming alerts. Core, Internet,
+target, and service health remain a quiet footer rather than competing with the
+day's context.
+
+Weather and Calendar enrich Idle only. They do not create new modes or change:
+
+```text
+GAMING > DEVELOPMENT > MEDIA > IDLE
+```
+
+Other scenes continue receiving the global state but deliberately remain
+uncluttered. If either optional source is disabled, its section is omitted. If
+a working source later becomes stale, the last useful data remains briefly with
+a subtle age label; external-data staleness is not an infrastructure alert.
+
+## Weather setup
+
+Olympus uses the [Open-Meteo forecast API](https://open-meteo.com/en/docs),
+which requires no account for this use. Location always comes from coordinates
+in the ignored `core/config.toml`; Olympus does not use browser geolocation or
+IP-based location.
+
+```toml
+[olympus]
+timezone = "Europe/Berlin"
+
+[weather]
+enabled = true
+latitude = 48.137
+longitude = 11.575
+timezone = "Europe/Berlin"
+location_name = "Home"
+poll_minutes = 10
+```
+
+Use an IANA timezone name so daylight-saving transitions are handled by the
+timezone database. Weather defaults to ten-minute polling, becomes subtly stale
+after thirty minutes without a successful refresh, and remains optional if
+coordinates are absent or invalid.
+
+## Calendar setup
+
+Olympus uses Google Calendar's read-only event scope and asks Google to expand
+recurring events into ordinary instances. The runtime refreshes access through
+a long-lived refresh token on Hermes; authentication never occurs in Display.
+
+1. In Google Cloud, enable the Google Calendar API and configure the OAuth
+   consent screen.
+2. Create OAuth credentials that permit
+   `http://127.0.0.1:8788/callback` (or use Google's loopback-capable desktop
+   application client).
+3. Copy `core/.env.example` to the ignored `core/.env`, set the client ID and
+   secret in your shell, then run the one-time helper:
+
+```bash
+cd core
+export OLYMPUS_GOOGLE_CLIENT_ID=your_client_id
+export OLYMPUS_GOOGLE_CLIENT_SECRET=your_client_secret
+.venv/bin/python tools/google_calendar_auth.py
+```
+
+The helper requests offline access and prints only the refresh token value to
+place in `core/.env`:
+
+```dotenv
+OLYMPUS_GOOGLE_CLIENT_ID=your_client_id
+OLYMPUS_GOOGLE_CLIENT_SECRET=your_client_secret
+OLYMPUS_GOOGLE_REFRESH_TOKEN=your_refresh_token
+```
+
+Enable the provider and choose one or more calendars in `core/config.toml`:
+
+```toml
+[calendar]
+enabled = true
+provider = "google"
+timezone = "Europe/Berlin"
+lookahead_days = 7
+poll_minutes = 5
+calendar_ids = ["primary", "another-calendar-id"]
+```
+
+Then start Core with `--env-file .env`. Google recommends offline access for a
+service that must refresh tokens while its user is absent; Olympus uses the
+official [OAuth refresh-token flow](https://developers.google.com/identity/protocols/oauth2/web-server)
+and [Calendar events endpoint](https://developers.google.com/calendar/api/v3/reference/events/list).
+
+Only title, start/end, all-day state, optional location, and Calendar label are
+normalized into Olympus. Descriptions, attendees and their email addresses,
+conferencing data, attachments, and notes are neither requested nor exposed.
+Cancelled events are excluded; Google expands recurring instances. Calendar
+defaults to a seven-day lookahead and five-minute polling.
 
 ## Run the macOS agent
 
@@ -444,7 +540,7 @@ When the Display is not running on Hermes itself, configure the Core endpoint:
 VITE_OLYMPUS_CORE_WS=ws://10.10.0.10:8000/ws/display npm run dev
 ```
 
-For v0.6, the Display is a browser-based development UI. It is not yet packaged
+For v0.7, the Display is a browser-based development UI. It is not yet packaged
 or deployed as a kiosk.
 
 ## Test
@@ -470,7 +566,7 @@ gradle build
 ```
 
 The current milestone does not include a database, Olympus authentication,
-Docker, kiosk packaging, application control, audio/RGB output, Matchday, or
-future information scenes. FPS remains an optional external Windows input, and
+Docker, kiosk packaging, application control, audio/RGB output, Night Mode,
+Matchday, or News. FPS remains an optional external Windows input, and
 unavailable metrics are omitted. macOS and Windows CPU temperature remain
 unavailable unless a future reliable local provider is added.
