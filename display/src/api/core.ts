@@ -1,9 +1,9 @@
 import type {
-  ActivityMode, ActivityTelemetry, ActiveAlert, CoreHostState, DisplayEventMessage, GameInfo, GameplayEvent, GamingState, GpuTelemetry,
+  ActivityMode, ActivityTelemetry, ActiveAlert, CalendarEvent, CalendarState, CoreHostState, CurrentWeather, DailyWeather, DisplayEventMessage, GameInfo, GameplayEvent, GamingState, GpuTelemetry,
   MachineState, MediaAlbum, MediaArtist, MediaContext, MediaQueueTrack,
   MediaState, MediaTrack, NetworkState, NetworkTelemetry, OlympusState,
   ProbeState, RecoveryNotice, ServiceState, StorageTelemetry, SystemTelemetry,
-  TemperatureTelemetry,
+  TemperatureTelemetry, WeatherCondition, WeatherState,
 } from "../types/state";
 
 export const DEFAULT_CORE_WS = "ws://127.0.0.1:8000/ws/display";
@@ -172,6 +172,54 @@ function isGameplayEvent(value: unknown): value is GameplayEvent {
     isRecord(value.payload);
 }
 
+const WEATHER_CONDITIONS: WeatherCondition[] = [
+  "clear", "mostly_clear", "partly_cloudy", "cloudy", "fog", "drizzle",
+  "rain", "heavy_rain", "snow", "thunderstorm", "unknown",
+];
+
+function isCurrentWeather(value: unknown): value is CurrentWeather {
+  return isRecord(value) && isOptionalNumber(value.temperature_c) &&
+    isOptionalNumber(value.apparent_temperature_c) &&
+    WEATHER_CONDITIONS.includes(value.condition as WeatherCondition) &&
+    isOptionalNumber(value.precipitation_probability) && isOptionalNumber(value.wind_speed_kmh) &&
+    (value.is_day === null || typeof value.is_day === "boolean");
+}
+
+function isDailyWeather(value: unknown): value is DailyWeather {
+  return isRecord(value) && typeof value.date === "string" &&
+    isOptionalNumber(value.high_c) && isOptionalNumber(value.low_c) &&
+    WEATHER_CONDITIONS.includes(value.condition as WeatherCondition) &&
+    isNullableString(value.sunrise) && isNullableString(value.sunset) &&
+    isOptionalNumber(value.precipitation_probability_max);
+}
+
+function isWeatherState(value: unknown): value is WeatherState {
+  return isRecord(value) && typeof value.available === "boolean" && typeof value.stale === "boolean" &&
+    typeof value.observed_at === "string" && isRecord(value.location) &&
+    typeof value.location.latitude === "number" && typeof value.location.longitude === "number" &&
+    typeof value.location.timezone === "string" && isNullableString(value.location.name) &&
+    (value.current === null || isCurrentWeather(value.current)) &&
+    (value.today === null || isDailyWeather(value.today)) &&
+    (value.tomorrow === null || isDailyWeather(value.tomorrow));
+}
+
+function isCalendarEvent(value: unknown): value is CalendarEvent {
+  return isRecord(value) && typeof value.id === "string" && typeof value.title === "string" &&
+    isNullableString(value.start) && isNullableString(value.end) &&
+    isNullableString(value.start_date) && isNullableString(value.end_date) &&
+    typeof value.all_day === "boolean" && isNullableString(value.location) &&
+    typeof value.calendar_id === "string" && typeof value.calendar_name === "string" &&
+    (value.status === "future" || value.status === "ongoing");
+}
+
+function isCalendarState(value: unknown): value is CalendarState {
+  return isRecord(value) && typeof value.available === "boolean" && typeof value.stale === "boolean" &&
+    typeof value.observed_at === "string" && Array.isArray(value.events) && value.events.every(isCalendarEvent) &&
+    Array.isArray(value.today) && value.today.every(isCalendarEvent) &&
+    Array.isArray(value.tomorrow) && value.tomorrow.every(isCalendarEvent) &&
+    (value.next_event === null || isCalendarEvent(value.next_event));
+}
+
 function isServiceState(value: unknown): value is ServiceState {
   return isRecord(value) && typeof value.id === "string" && typeof value.name === "string" &&
     isProbeState(value) && (value.last_changed === null || typeof value.last_changed === "string");
@@ -223,6 +271,9 @@ export function parseStateMessage(rawMessage: string): OlympusState | null {
     !Object.values(value.machines).every(isMachineState) ||
     !(value.gaming === undefined || value.gaming === null || isGamingState(value.gaming)) ||
     !(value.media === undefined || value.media === null || isMediaState(value.media)) ||
+    !(value.timezone === undefined || typeof value.timezone === "string") ||
+    !(value.weather === undefined || value.weather === null || isWeatherState(value.weather)) ||
+    !(value.calendar === undefined || value.calendar === null || isCalendarState(value.calendar)) ||
     !(value.core_host === undefined || value.core_host === null || isCoreHostState(value.core_host)) ||
     !(value.network === undefined || value.network === null || isNetworkState(value.network)) ||
     !(value.services === undefined || (isRecord(value.services) && Object.values(value.services).every(isServiceState))) ||
@@ -235,6 +286,9 @@ export function parseStateMessage(rawMessage: string): OlympusState | null {
     machines: Object.fromEntries(Object.entries(value.machines).map(([id, machine]) =>
       [id, normalizeMachine(machine as unknown as MachineState)])),
     media: (value.media as MediaState | null | undefined) ?? null,
+    timezone: (value.timezone as string | undefined) ?? "UTC",
+    weather: (value.weather as WeatherState | null | undefined) ?? null,
+    calendar: (value.calendar as CalendarState | null | undefined) ?? null,
     gaming: value.gaming ? {
       ...(value.gaming as unknown as GamingState),
       integration: (value.gaming.integration as GamingState["integration"] | undefined) ?? null,

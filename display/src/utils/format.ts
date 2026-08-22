@@ -28,20 +28,55 @@ export function formatPlatform(platform: string): string {
   return names[platform.toLowerCase()] ?? platform;
 }
 
-export function formatTime(date: Date): string {
+export function formatTime(date: Date, timeZone?: string): string {
   return new Intl.DateTimeFormat(undefined, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone,
   }).format(date);
 }
 
-export function formatDate(date: Date): string {
+export function formatDate(date: Date, timeZone?: string): string {
   return new Intl.DateTimeFormat(undefined, {
     weekday: "long",
     day: "numeric",
     month: "long",
+    timeZone,
   }).format(date);
+}
+
+export function formatTemperature(value: number): string {
+  return `${Math.round(value)}°`;
+}
+
+export function formatWeatherCondition(condition: string): string {
+  return condition.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+export function formatEventTime(start: string | null, allDay: boolean, timeZone: string): string {
+  if (allDay) return "All day";
+  if (!start) return "—";
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone,
+  }).format(new Date(start));
+}
+
+export function formatRelativeEvent(start: string | null, end: string | null, status: "future" | "ongoing", now: Date): string {
+  const target = status === "ongoing" ? end : start;
+  if (!target) return status === "ongoing" ? "Happening now" : "Upcoming";
+  const minutes = Math.max(0, Math.ceil((new Date(target).getTime() - now.getTime()) / 60_000));
+  if (status === "ongoing") {
+    if (minutes < 1) return "Ending now";
+    return `Now · ends in ${minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`}`;
+  }
+  if (minutes < 1) return "Starting now";
+  if (minutes < 60) return `in ${minutes} min`;
+  if (minutes < 24 * 60) return `in ${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  return `in ${Math.ceil(minutes / (24 * 60))} days`;
 }
 
 export function formatDuration(milliseconds: number): string {

@@ -253,12 +253,79 @@ export interface DisplayEventMessage {
   event: GameplayEvent;
 }
 
+export type WeatherCondition =
+  | "clear" | "mostly_clear" | "partly_cloudy" | "cloudy" | "fog"
+  | "drizzle" | "rain" | "heavy_rain" | "snow" | "thunderstorm" | "unknown";
+
+export interface WeatherLocation {
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  name: string | null;
+}
+
+export interface CurrentWeather {
+  temperature_c: number | null;
+  apparent_temperature_c: number | null;
+  condition: WeatherCondition;
+  precipitation_probability: number | null;
+  wind_speed_kmh: number | null;
+  is_day: boolean | null;
+}
+
+export interface DailyWeather {
+  date: string;
+  high_c: number | null;
+  low_c: number | null;
+  condition: WeatherCondition;
+  sunrise: string | null;
+  sunset: string | null;
+  precipitation_probability_max: number | null;
+}
+
+export interface WeatherState {
+  available: boolean;
+  stale: boolean;
+  observed_at: string;
+  location: WeatherLocation;
+  current: CurrentWeather | null;
+  today: DailyWeather | null;
+  tomorrow: DailyWeather | null;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  start: string | null;
+  end: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  all_day: boolean;
+  location: string | null;
+  calendar_id: string;
+  calendar_name: string;
+  status: "future" | "ongoing";
+}
+
+export interface CalendarState {
+  available: boolean;
+  stale: boolean;
+  observed_at: string;
+  events: CalendarEvent[];
+  today: CalendarEvent[];
+  tomorrow: CalendarEvent[];
+  next_event: CalendarEvent | null;
+}
+
 export interface OlympusState {
   type: "state";
   mode: ActivityMode;
   active_device: string | null;
   generated_at: string;
   machines: Record<string, MachineState>;
+  timezone: string;
+  weather: WeatherState | null;
+  calendar: CalendarState | null;
   gaming: GamingState | null;
   media: MediaState | null;
   core_host: CoreHostState | null;

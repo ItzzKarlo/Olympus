@@ -53,7 +53,7 @@ export default function App() {
   return (
     <main className={`olympus-display mode-${state.mode}`} style={sceneStyle(theme)}>
       <ParticleField
-        key={`${state.mode}:${state.gaming?.game.id ?? ""}`}
+        key={`${state.mode}:${state.gaming?.game.id ?? ""}:${state.weather?.current?.condition ?? ""}`}
         theme={theme.particles}
       />
       <div key={state.mode} className="scene-transition">

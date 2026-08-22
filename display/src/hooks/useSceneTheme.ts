@@ -5,6 +5,7 @@ import { getGamePresentation } from "../modes/Gaming/gameThemes";
 import { getMinecraftDimensionTheme } from "../modes/Gaming/minecraftThemes";
 import type { SceneTheme } from "../theme/SceneTheme";
 import { developmentTheme, idleTheme } from "../theme/themes";
+import { getIdleWeatherTheme } from "../theme/idleWeatherTheme";
 import type { OlympusState } from "../types/state";
 
 interface ResolvedMediaTheme {
@@ -38,5 +39,8 @@ export function useSceneTheme(state: OlympusState | null): SceneTheme {
   }
   if (state?.mode === "development") return developmentTheme;
   if (state?.mode === "media") return mediaTheme?.theme ?? initialFallback;
+  if (state?.mode === "idle" && state.weather?.available) {
+    return getIdleWeatherTheme(state.weather.current?.condition);
+  }
   return idleTheme;
 }
