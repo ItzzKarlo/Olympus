@@ -35,11 +35,12 @@ def build_hello(
     agent_version: str,
     public_key: bytes | None = None,
     enrollment_token: str | None = None,
+    display_name: str | None = None,
 ) -> dict[str, str]:
     hello = {
         "type": "hello",
         "agent_id": agent_id,
-        "hostname": socket.gethostname(),
+        "hostname": display_name or socket.gethostname(),
         "platform": platform_name,
         "platform_version": platform_version or platform.release(),
         "agent_version": agent_version,
