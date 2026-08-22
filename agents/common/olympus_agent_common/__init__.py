@@ -1,3 +1,3 @@
 """Shared protocol and runtime foundations for Olympus device agents."""
 
-__version__ = "0.10.0"
+__version__ = "0.11.0"

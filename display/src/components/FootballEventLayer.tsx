@@ -6,7 +6,7 @@ type ParticleStyle = CSSProperties & Record<`--${string}`, string>;
 
 export function FootballEventLayer({ events, state }: { events: FootballDisplayEvent[]; state: OlympusState }) {
   const context = state.football?.matchday;
-  if (!context || state.alerts.some((alert) => alert.severity === "critical")) return null;
+  if (!context || state.mode !== "matchday" || state.alerts.some((alert) => alert.severity === "critical")) return null;
   return (
     <div className="football-event-layer" aria-live="assertive">
       {events.map((message) => {

@@ -266,7 +266,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="Olympus Core",
     description="Core service for the Olympus home display system.",
-    version="0.10.0",
+    version="0.11.0",
     lifespan=lifespan,
 )
 
@@ -276,7 +276,7 @@ async def health() -> dict[str, str]:
     return {
         "status": "ok",
         "service": "olympus-core",
-        "version": "0.10.0",
+        "version": "0.11.0",
     }
 
 

@@ -96,14 +96,15 @@ machine Agent:
 Minecraft + Fabric observer → localhost Agent → Core → Display
 ```
 
-Olympus v0.10 implements this full local path. Agents own device-specific
+Olympus v0.11 implements this full local path. Agents own device-specific
 observation, Core owns interpretation and monitoring, and the Display consumes
 only Core's normalized state.
 
 Normal scene priority is explicit and phase-aware:
 
 ```text
-LIVE MATCHDAY > GAMING > DEVELOPMENT > PRE/POST MATCHDAY > MEDIA
+LIVE MATCHDAY > MAJOR NEWS > GAMING > DEVELOPMENT
+              > PRE/POST MATCHDAY > IMPORTANT NEWS > MEDIA
 ```
 
 When no activity is active, Core chooses `NIGHT` during the configured night
@@ -470,7 +471,134 @@ missing player coverage, quota pressure, and an outage. For fast local sequences
 set the two analytics polling intervals to one second in the simulation-only
 configuration. The fixture provider remains development-only; fake match data is
 not built into production state. Matchday deliberately excludes audio, lighting,
-betting, predictions, controls, standings, and news.
+betting, predictions, controls, and standings.
+
+## News
+
+Olympus v0.11 adds optional News awareness without turning the room into a
+scrolling news site. Production collection is RSS/Atom-first. Feeds are fetched
+by Core, parsed with `feedparser`, and normalized into Olympus-owned articles and
+story clusters. Display never contacts publishers directly.
+
+Enable News and add reputable public feeds in the ignored `core/config.toml`:
+
+```toml
+[news]
+enabled = true
+provider = "rss"
+poll_minutes = 5
+retention_hours = 48
+stale_minutes = 15
+unavailable_minutes = 60
+default_language = "en"
+local_regions = ["DE"]
+
+[news.presentation]
+ambient_limit = 3
+news_scene_seconds = 20
+major_scene_seconds = 45
+cooldown_minutes = 30
+notable_threshold = 0.55
+important_threshold = 0.68
+major_threshold = 0.86
+
+[news.interests]
+technology = 1.1
+germany = 1.2
+world = 1.0
+
+[[news.feeds]]
+id = "publisher-world"
+name = "Publisher World"
+url = "https://publisher.example/world.xml"
+language = "en"
+region = "DE"
+topic = "world"
+trust = 1.0
+```
+
+Feed URLs are configuration, never Core logic. `trust` and interest multipliers
+are local ranking preferences—not truth, credibility verdicts, or political
+judgments. Olympus never infers location from an IP address. German and English
+headlines retain their original language; v0.11 does not translate them.
+
+Core sends `ETag` and `Last-Modified` validators after a successful response and
+accepts `304 Not Modified` without reprocessing the feed. Each feed has isolated
+health state, so a timeout, malformed document, `404`, `429`, or server failure
+does not stop healthy publishers. If all feeds remain unavailable, recent News
+first becomes stale and then disappears quietly from Idle/Night—never as an
+infrastructure alert.
+
+Olympus retains only a bounded recent in-memory window. It stores publisher
+headlines, short publisher-supplied summaries, source, topic metadata, timestamp,
+and canonical URL. Summary HTML becomes length-limited plain text; obvious
+tracking parameters are removed. Olympus does not download article bodies,
+scrape publisher pages, bypass paywalls, or claim authorship of publisher text.
+
+### Clustering and importance
+
+Exact GUID/URL/title matches and conservative headline token/sequence similarity
+group likely duplicate reports into one story cluster. False negatives are
+preferred over merging loosely related stories. A representative publisher
+headline is chosen deterministically; Olympus does not rewrite it.
+
+Importance uses a local, deterministic score based on recentness, independent
+source count, configured source weight, broad topic, configured regional
+relevance, conservative developing-event terms, source velocity, and age decay.
+The factor breakdown remains in Core state for tuning. Multiple trusted sources
+matter substantially more than punctuation or a lone “breaking” keyword, and a
+single article cannot reach `major` from sensational wording alone.
+
+> Olympus importance is a local heuristic used to decide presentation priority.
+> It is not an objective assessment of journalistic importance or truth.
+
+News ranking and clustering are local and deterministic. No LLM, embeddings API,
+cloud AI, betting data, or private semantic service is required. GDELT is not a
+v0.11 dependency; the deliberately smaller RSS baseline is complete on its own.
+
+### Presentation policy
+
+Ambient and Notable stories never take over the room. Idle shows at most three
+compact headlines and Night shows one subdued headline. Important stories may
+temporarily replace Idle, Night, or Media. Major stories may also replace Gaming
+and Development. Pre/post Matchday remains protected from Important News, and a
+live Bayern match remains protected even from generic Major News:
+
+```text
+LIVE MATCHDAY > MAJOR NEWS > GAMING > DEVELOPMENT
+              > PRE/POST MATCHDAY > IMPORTANT NEWS > MEDIA > NIGHT/IDLE
+```
+
+Core owns the exact 20/45-second presentation interval. Reconnecting Displays
+receive the active story and its actual end time. A higher-priority context may
+interrupt News while its timer continues in the background. Cooldown and
+highest-presented-level memory prevent repeated polls or a burst of stories from
+creating a presentation queue. `important → major` escalation may present again.
+Existing clusters establish a silent baseline on Core startup, so restarts never
+replay old “breaking” stories.
+
+Routine Bayern reporting is capped below takeover level because Matchday is the
+specialized authority. Routine forecasts similarly defer to the Weather
+integration; genuinely corroborated emergency weather reporting may still rank
+as News. v0.11 also introduces a small generic `LiveEvent` model for future
+structured providers such as elections or launches, but ships no election or
+other live-event provider. Structured integrations will outrank generic News for
+the same event.
+
+For a complete development-only sequence through the real collector, resolver,
+event hub, WebSocket, and Display path, set `news.provider = "fixture"`, configure
+`OLYMPUS_NEWS_FIXTURE_PATH`, and run:
+
+```bash
+cd core
+.venv/bin/python tools/news_simulator.py ordinary --output /tmp/olympus-news.json
+.venv/bin/python tools/news_simulator.py sequence --delay 5 --output /tmp/olympus-news.json
+```
+
+The simulator covers exact duplication, cross-source clustering, Notable,
+Important and Major escalation, unchanged/cooldown behavior, simultaneous
+stories, stale feeds, and recovery. Fake articles remain fixture-provider data
+and never enter production News state.
 
 ## Weather setup
 

@@ -69,7 +69,7 @@ export default function App() {
       <div key={state.mode} className="scene-transition">
         {scene}
       </div>
-      <GameplayEventLayer events={gameplayEvents} />
+      <GameplayEventLayer events={state.mode === "gaming" ? gameplayEvents : []} />
       <FootballEventLayer events={footballEvents} state={state} />
       <EventOverlayLayer alerts={state.alerts} now={now} recoveries={state.recoveries} />
       {connectionStatus !== "connected" ? (
