@@ -23,6 +23,9 @@ from olympus_core.models.calendar import CalendarSnapshot
 from olympus_core.models.football import FootballDisplayEvent, FootballState
 from olympus_core.models.news import NewsDisplayEvent, NewsState
 from olympus_core.models.state import OlympusState
+from olympus_core.persistence.database import Database
+from olympus_core.persistence.devices import DeviceRepository
+from olympus_core.persistence.enrollment import EnrollmentRepository
 from olympus_core.services.media import MediaStateStore
 from olympus_core.services.events import EventService
 from olympus_core.services.monitoring_store import MonitoringStore
@@ -39,6 +42,11 @@ from olympus_core.websocket.display import handle_display_socket
 logger = logging.getLogger(__name__)
 registry = AgentRegistry()
 core_settings = load_core_config()
+database = Database(core_settings.persistence.resolved_database_path)
+device_repository = DeviceRepository(database)
+enrollment_repository = EnrollmentRepository(
+    database, core_settings.security.enrollment_token_ttl_minutes
+)
 media_store = MediaStateStore()
 weather_store = WeatherStateStore()
 calendar_store = CalendarStateStore(core_settings.timezone)
@@ -127,6 +135,10 @@ async def publish_news_event(event: NewsDisplayEvent) -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    database.initialize()
+    logger.info("Core persistence initialized")
+    if not core_settings.security.require_agent_auth:
+        logger.warning("Agent authentication is DISABLED. Use only for local development.")
     monitoring = MonitoringRuntime(
         load_monitoring_config(),
         monitoring_store,
@@ -261,12 +273,13 @@ async def lifespan(_app: FastAPI):
             news_collector.stop()
             await news_task
         await monitoring.stop()
+        database.close()
 
 
 app = FastAPI(
     title="Olympus Core",
     description="Core service for the Olympus home display system.",
-    version="0.11.0",
+    version="0.12.0",
     lifespan=lifespan,
 )
 
@@ -276,7 +289,8 @@ async def health() -> dict[str, str]:
     return {
         "status": "ok",
         "service": "olympus-core",
-        "version": "0.11.0",
+        "version": "0.12.0",
+        "persistence": "healthy" if database.available else "unavailable",
     }
 
 
@@ -298,6 +312,9 @@ async def agent_socket(websocket: WebSocket) -> None:
         publish_display_state,
         publish_gameplay_event,
         gameplay_service,
+        core_settings.security,
+        device_repository,
+        enrollment_repository,
     )
 
 

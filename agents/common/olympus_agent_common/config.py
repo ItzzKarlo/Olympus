@@ -39,6 +39,7 @@ class AgentConfig:
     game_background_grace_seconds: float = 15.0
     integration_port: int = 38_765
     integration_stale_seconds: float = 5.0
+    key_path: Path | None = None
 
     @classmethod
     def from_environment(cls, default_identity_path: Path) -> "AgentConfig":
@@ -56,4 +57,10 @@ class AgentConfig:
             integration_stale_seconds=_positive_float(
                 "OLYMPUS_INTEGRATION_STALE_SECONDS", 5.0
             ),
+            key_path=Path(
+                os.getenv(
+                    "OLYMPUS_AGENT_KEY_PATH",
+                    str(default_identity_path.with_name("agent-key.pem")),
+                )
+            ).expanduser(),
         )

@@ -201,6 +201,26 @@ class NewsSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class PersistenceSettings:
+    database_path: Path = Path("~/.local/share/olympus/core.db")
+    incident_retention_days: int = 30
+    news_memory_retention_days: int = 7
+
+    @property
+    def resolved_database_path(self) -> Path:
+        return self.database_path.expanduser()
+
+
+@dataclass(frozen=True, slots=True)
+class SecuritySettings:
+    require_agent_auth: bool = True
+    enrollment_token_ttl_minutes: int = 10
+    auth_timeout_seconds: float = 10.0
+    revocation_refresh_seconds: float = 30.0
+    last_seen_write_seconds: float = 60.0
+
+
+@dataclass(frozen=True, slots=True)
 class CoreSettings:
     timezone: str = DEFAULT_TIMEZONE
     weather: WeatherSettings = WeatherSettings()
@@ -208,6 +228,8 @@ class CoreSettings:
     night: NightSettings = NightSettings()
     football: FootballSettings = FootballSettings()
     news: NewsSettings = NewsSettings()
+    persistence: PersistenceSettings = PersistenceSettings()
+    security: SecuritySettings = SecuritySettings()
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -295,6 +317,8 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
     news_data = _mapping(data.get("news"))
     news_presentation_data = _mapping(news_data.get("presentation"))
     news_interests_data = _mapping(news_data.get("interests"))
+    persistence_data = _mapping(data.get("persistence"))
+    security_data = _mapping(data.get("security"))
     weather_timezone = _timezone(weather_data.get("timezone"), timezone)
     calendar_timezone = _timezone(calendar_data.get("timezone"), timezone)
     weather_poll = _positive_float(
@@ -485,6 +509,32 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
                 notable_threshold=_bounded_float(news_presentation_data.get("notable_threshold"), 0.55, 0, 1),
                 important_threshold=_bounded_float(news_presentation_data.get("important_threshold"), 0.68, 0, 1),
                 major_threshold=_bounded_float(news_presentation_data.get("major_threshold"), 0.86, 0, 1),
+            ),
+        ),
+        persistence=PersistenceSettings(
+            database_path=Path(str(
+                persistence_data.get("database_path", "~/.local/share/olympus/core.db")
+            )),
+            incident_retention_days=min(
+                _positive_int(persistence_data.get("incident_retention_days"), 30), 3650
+            ),
+            news_memory_retention_days=min(
+                _positive_int(persistence_data.get("news_memory_retention_days"), 7), 365
+            ),
+        ),
+        security=SecuritySettings(
+            require_agent_auth=bool(security_data.get("require_agent_auth", True)),
+            enrollment_token_ttl_minutes=min(
+                _positive_int(security_data.get("enrollment_token_ttl_minutes"), 10), 1440
+            ),
+            auth_timeout_seconds=_bounded_float(
+                security_data.get("auth_timeout_seconds"), 10.0, 1.0, 60.0
+            ),
+            revocation_refresh_seconds=_bounded_float(
+                security_data.get("revocation_refresh_seconds"), 30.0, 1.0, 3600.0
+            ),
+            last_seen_write_seconds=_bounded_float(
+                security_data.get("last_seen_write_seconds"), 60.0, 5.0, 3600.0
             ),
         ),
     )

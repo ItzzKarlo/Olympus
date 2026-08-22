@@ -17,4 +17,5 @@ class AgentConfig(CommonAgentConfig):
             game_background_grace_seconds=common.game_background_grace_seconds,
             integration_port=common.integration_port,
             integration_stale_seconds=common.integration_stale_seconds,
+            key_path=common.key_path,
         )

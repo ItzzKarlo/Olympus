@@ -2,18 +2,30 @@ import asyncio
 from collections.abc import Callable
 import json
 import logging
+import os
 from typing import Any
 
 from websockets.asyncio.client import connect
 
 from olympus_agent_common.config import AgentConfig
-from olympus_agent_common.identity import load_or_create_agent_id
+from olympus_agent_common.identity import load_or_create_agent_id, load_or_create_device_key
 from olympus_agent_common.integrations import LocalIntegrationServer
-from olympus_agent_common.protocol import build_hello, validate_welcome
+from olympus_agent_common.protocol import (
+    auth_payload,
+    build_hello,
+    decode_base64url,
+    encode_base64url,
+    parse_handshake,
+    validate_welcome,
+)
 
 
 LOGGER = logging.getLogger("olympus-agent")
 TelemetryCollector = Callable[[], dict[str, Any]]
+
+
+class EnrollmentRequired(RuntimeError):
+    pass
 
 
 async def run_connection(
@@ -25,6 +37,9 @@ async def run_connection(
     collect_telemetry: TelemetryCollector,
     integrations: LocalIntegrationServer | None = None,
 ) -> None:
+    key_path = config.key_path or config.identity_path.with_name("agent-key.pem")
+    device_key = load_or_create_device_key(key_path)
+    enrollment_token = os.getenv("OLYMPUS_ENROLLMENT_TOKEN") or None
     async with connect(config.core_ws_url) as websocket:
         await websocket.send(
             json.dumps(
@@ -33,10 +48,32 @@ async def run_connection(
                     platform_name,
                     platform_version,
                     agent_version,
+                    device_key.public_bytes,
+                    enrollment_token,
                 )
             )
         )
-        validate_welcome(await websocket.recv(), agent_id)
+        response = await websocket.recv()
+        handshake = parse_handshake(response)
+        if handshake["type"] == "enrollment_required":
+            raise EnrollmentRequired(
+                f"Core requires device enrollment. Agent {agent_id}. "
+                "Create a one-time token on Olympus Core and provide it using "
+                "OLYMPUS_ENROLLMENT_TOKEN."
+            )
+        if handshake["type"] == "auth_challenge":
+            if handshake.get("protocol") != "olympus-agent-auth-v1":
+                raise ValueError("Core requested an unsupported authentication protocol")
+            challenge = decode_base64url(str(handshake.get("challenge", "")))
+            if len(challenge) < 32:
+                raise ValueError("Core returned an invalid authentication challenge")
+            signature = device_key.sign(auth_payload(agent_id, challenge))
+            await websocket.send(json.dumps({
+                "type": "auth_response",
+                "signature": encode_base64url(signature),
+            }))
+            response = await websocket.recv()
+        validate_welcome(response, agent_id)
         LOGGER.info("Connected to Olympus Core as %s", agent_id)
 
         send_lock = asyncio.Lock()
@@ -98,6 +135,10 @@ async def run_forever(
                 integrations,
             )
         except Exception as error:
+            if isinstance(error, EnrollmentRequired):
+                LOGGER.warning("%s", error)
+                await asyncio.sleep(max(30.0, config.reconnect_delay))
+                continue
             LOGGER.warning(
                 "Core connection unavailable (%s); retrying in %.1f seconds",
                 error,
