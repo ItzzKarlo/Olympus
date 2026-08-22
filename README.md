@@ -78,14 +78,77 @@ Agents send this information to the Olympus Core.
 ## Initial architecture
 
 ```text
-                       OLYMPUS CORE
-                           │
-           ┌───────────────┴───────────────┐
-           │                               │
-           ▼                               ▼
-       DISPLAY                         AGENT API
-                                           │
-                         ┌─────────────────┼─────────────────┐
-                         │                 │                 │
-                         ▼                 ▼                 ▼
-                    macOS Agent       Windows Agent      Linux Agent
+macOS Agent ──persistent WebSocket──> Olympus Core ──HTTP state──> Display
+    │                                      │
+    └─ observes CPU, RAM, and IDEs          └─ interprets global mode
+```
+
+The first vertical slice is implemented for macOS. The agent owns device-specific
+observation, Core owns mode selection, and the future Display will consume only
+Core's interpreted state.
+
+## Run Olympus Core
+
+```bash
+cd core
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn olympus_core.main:app --reload
+```
+
+For agents on other home-LAN devices, run Core on Hermes' LAN interface:
+
+```bash
+uvicorn olympus_core.main:app --host 0.0.0.0 --reload
+```
+
+Core exposes:
+
+- `GET /health` — service health
+- `GET /api/agents` — registered devices and their latest telemetry
+- `GET /api/state` — interpreted Olympus mode and machine state
+- `WS /ws/agents` — persistent agent connection
+
+State is intentionally held in memory for this milestone.
+
+## Run the macOS agent
+
+```bash
+cd agents/macos
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m olympus_agent.main
+```
+
+The agent generates a permanent random identity in `~/.olympus/agent-id`, keeps
+one WebSocket open, sends CPU/RAM telemetry every two seconds, and reconnects when
+Core is unavailable. It reports development activity when a supported IDE process
+is running.
+
+For local development, the agent connects to localhost. When Core is running on
+Hermes on the home LAN, point it at Hermes explicitly:
+
+```bash
+OLYMPUS_CORE_WS=ws://10.10.0.10:8000/ws/agents python -m olympus_agent.main
+```
+
+Optional settings:
+
+- `OLYMPUS_TELEMETRY_INTERVAL` — telemetry interval in seconds (default `2`)
+- `OLYMPUS_RECONNECT_DELAY` — retry delay in seconds (default `3`)
+- `OLYMPUS_AGENT_ID_PATH` — identity file override for development/testing
+
+## Test
+
+```bash
+cd core
+python -m unittest discover -s tests
+
+cd ../agents/macos
+python -m unittest discover -s tests
+```
+
+The current milestone does not include a database, authentication, Docker, or the
+Display. Windows and Linux agents remain future work.
