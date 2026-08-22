@@ -3,7 +3,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from olympus_core.models.telemetry import ActivityTelemetry, SystemTelemetry
+from olympus_core.models.telemetry import (
+    ActivityTelemetry,
+    GpuTelemetry,
+    NetworkTelemetry,
+    StorageTelemetry,
+    SystemTelemetry,
+    TemperatureTelemetry,
+)
 
 
 class AgentHello(BaseModel):
@@ -31,4 +38,8 @@ class RegisteredAgent(BaseModel):
     connected_at: datetime
     last_seen: datetime
     system: SystemTelemetry | None = None
+    storage: StorageTelemetry | None = None
+    network: NetworkTelemetry | None = None
+    temperatures: TemperatureTelemetry | None = None
+    gpu: GpuTelemetry | None = None
     activity: ActivityTelemetry | None = None

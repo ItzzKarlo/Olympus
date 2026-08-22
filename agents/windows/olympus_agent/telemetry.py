@@ -1,15 +1,18 @@
+from pathlib import Path
 import time
 from typing import Any
 
 import psutil
 
 from olympus_agent.activity import detect_development_activity
+from olympus_agent.gpu import collect_nvidia_gpu
 from olympus_agent_common.telemetry import build_telemetry
 
 
 def collect_telemetry() -> dict[str, Any]:
     memory = psutil.virtual_memory()
-    disk = psutil.disk_usage("/")
+    root = Path.home().anchor or "C:\\"
+    disk = psutil.disk_usage(root)
     network = psutil.net_io_counters()
     return build_telemetry(
         system={
@@ -28,5 +31,6 @@ def collect_telemetry() -> dict[str, Any]:
             "bytes_sent": network.bytes_sent,
             "bytes_received": network.bytes_recv,
         },
+        gpu=collect_nvidia_gpu(),
         activity=detect_development_activity().as_dict(),
     )

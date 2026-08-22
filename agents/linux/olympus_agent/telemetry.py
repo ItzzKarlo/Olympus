@@ -4,13 +4,36 @@ from typing import Any
 import psutil
 
 from olympus_agent.activity import detect_development_activity
-from olympus_agent_common.telemetry import build_telemetry
+from olympus_agent_common.telemetry import build_telemetry, optional_section
+
+
+PREFERRED_CPU_SENSORS = ("coretemp", "k10temp", "cpu_thermal", "acpitz")
+
+
+def normalize_cpu_temperature(readings: dict[str, list[Any]]) -> float | None:
+    for sensor_name in PREFERRED_CPU_SENSORS:
+        temperatures = [
+            float(entry.current)
+            for entry in readings.get(sensor_name, [])
+            if getattr(entry, "current", None) is not None
+        ]
+        if temperatures:
+            return max(temperatures)
+    return None
 
 
 def collect_telemetry() -> dict[str, Any]:
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
     network = psutil.net_io_counters()
+    try:
+        sensor_readings = psutil.sensors_temperatures(fahrenheit=False)
+    except (AttributeError, OSError):
+        sensor_readings = {}
+    temperatures = optional_section(
+        cpu_celsius=normalize_cpu_temperature(sensor_readings),
+        gpu_celsius=None,
+    )
     return build_telemetry(
         system={
             "cpu_percent": psutil.cpu_percent(interval=None),
@@ -28,5 +51,6 @@ def collect_telemetry() -> dict[str, Any]:
             "bytes_sent": network.bytes_sent,
             "bytes_received": network.bytes_recv,
         },
+        temperatures=temperatures,
         activity=detect_development_activity().as_dict(),
     )

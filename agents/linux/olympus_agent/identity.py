@@ -4,4 +4,4 @@ from olympus_agent_common.identity import load_or_create_agent_id as load_identi
 
 
 def load_or_create_agent_id(path: Path) -> str:
-    return load_identity(path, "mac")
+    return load_identity(path, "linux")

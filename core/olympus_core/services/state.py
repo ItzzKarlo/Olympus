@@ -36,6 +36,10 @@ class StateService:
                     online=agent.online,
                     last_seen=agent.last_seen,
                     system=agent.system,
+                    storage=agent.storage,
+                    network=agent.network,
+                    temperatures=agent.temperatures,
+                    gpu=agent.gpu,
                     activity=agent.activity,
                 )
                 for agent in agents

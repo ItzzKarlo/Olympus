@@ -1,3 +1,4 @@
 -e ../common
+nvidia-ml-py>=12,<14
 psutil>=6.0,<8
 websockets>=15,<18

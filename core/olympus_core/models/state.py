@@ -4,7 +4,15 @@ from typing import Literal
 from pydantic import BaseModel
 
 from olympus_core.models.media import MediaState
-from olympus_core.models.telemetry import ActivityMode, ActivityTelemetry, SystemTelemetry
+from olympus_core.models.telemetry import (
+    ActivityMode,
+    ActivityTelemetry,
+    GpuTelemetry,
+    NetworkTelemetry,
+    StorageTelemetry,
+    SystemTelemetry,
+    TemperatureTelemetry,
+)
 
 
 class MachineState(BaseModel):
@@ -15,6 +23,10 @@ class MachineState(BaseModel):
     online: bool
     last_seen: datetime
     system: SystemTelemetry | None
+    storage: StorageTelemetry | None
+    network: NetworkTelemetry | None
+    temperatures: TemperatureTelemetry | None
+    gpu: GpuTelemetry | None
     activity: ActivityTelemetry | None
 
 

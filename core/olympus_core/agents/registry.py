@@ -27,6 +27,10 @@ class AgentRegistry:
             connected_at=now,
             last_seen=now,
             system=existing.system if existing else None,
+            storage=existing.storage if existing else None,
+            network=existing.network if existing else None,
+            temperatures=existing.temperatures if existing else None,
+            gpu=existing.gpu if existing else None,
             activity=existing.activity if existing else None,
         )
         self._agents[hello.agent_id] = agent
@@ -46,6 +50,10 @@ class AgentRegistry:
             return agent
 
         agent.system = telemetry.system
+        agent.storage = telemetry.storage
+        agent.network = telemetry.network
+        agent.temperatures = telemetry.temperatures
+        agent.gpu = telemetry.gpu
         agent.activity = telemetry.activity
         agent.last_seen = datetime.now(timezone.utc)
         return agent
