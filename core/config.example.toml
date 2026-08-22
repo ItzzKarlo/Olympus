@@ -1,6 +1,27 @@
 # Olympus v0.6 monitoring configuration. Copy to core/config.toml.
 core_host_poll_seconds = 5
 
+[olympus]
+# IANA timezone used by the room display and calendar interpretation.
+timezone = "Europe/Berlin"
+
+[weather]
+enabled = false
+# Configure the fixed home location; Olympus never uses browser/IP geolocation.
+latitude = 48.137
+longitude = 11.575
+timezone = "Europe/Berlin"
+location_name = "Home"
+poll_minutes = 10
+
+[calendar]
+enabled = false
+provider = "google"
+timezone = "Europe/Berlin"
+lookahead_days = 7
+poll_minutes = 5
+calendar_ids = ["primary"]
+
 [network]
 enabled = true
 poll_seconds = 5
