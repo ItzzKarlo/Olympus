@@ -1,5 +1,5 @@
 import type {
-  ActivityMode, ActivityTelemetry, ActiveAlert, CoreHostState, GameInfo, GamingState, GpuTelemetry,
+  ActivityMode, ActivityTelemetry, ActiveAlert, CoreHostState, DisplayEventMessage, GameInfo, GameplayEvent, GamingState, GpuTelemetry,
   MachineState, MediaAlbum, MediaArtist, MediaContext, MediaQueueTrack,
   MediaState, MediaTrack, NetworkState, NetworkTelemetry, OlympusState,
   ProbeState, RecoveryNotice, ServiceState, StorageTelemetry, SystemTelemetry,
@@ -132,7 +132,44 @@ function isNetworkState(value: unknown): value is NetworkState {
 
 function isGamingState(value: unknown): value is GamingState {
   return isRecord(value) && isGameInfo(value.game) &&
-    typeof value.session_started_at === "string" && isOptionalNumber(value.fps);
+    typeof value.session_started_at === "string" && isOptionalNumber(value.fps) &&
+    (value.integration === undefined || value.integration === null || isGamingIntegration(value.integration)) &&
+    (value.minecraft === undefined || value.minecraft === null || isMinecraftState(value.minecraft));
+}
+
+function isGamingIntegration(value: unknown): boolean {
+  return isRecord(value) && typeof value.type === "string" &&
+    typeof value.available === "boolean" && typeof value.connected === "boolean" &&
+    typeof value.last_seen === "string" && isRecord(value.observer) &&
+    typeof value.observer.id === "string" && typeof value.observer.name === "string" &&
+    typeof value.observer.version === "string";
+}
+
+function isMinecraftState(value: unknown): boolean {
+  if (!isRecord(value) || !isRecord(value.connection) || !isRecord(value.world) ||
+    !isRecord(value.player) || !isRecord(value.player.position)) return false;
+  const player = value.player;
+  const connectionType = value.connection.type;
+  const gameMode = player.game_mode;
+  return (connectionType === "singleplayer" || connectionType === "multiplayer") &&
+    isNullableString(value.connection.server_name) && isNullableString(value.connection.server_address) &&
+    isNullableString(value.connection.world_name) && typeof value.world.dimension === "string" &&
+    typeof value.world.biome === "string" && ["x", "y", "z"].every((axis) =>
+      isOptionalNumber((player.position as Record<string, unknown>)[axis])) &&
+    ["health", "max_health", "food", "max_food", "armor"].every((field) =>
+      isOptionalNumber(player[field])) &&
+    (player.experience === null || (isRecord(player.experience) &&
+      isOptionalNumber(player.experience.level) && isOptionalNumber(player.experience.progress))) &&
+    ["survival", "creative", "adventure", "spectator", "unknown"].includes(gameMode as string) &&
+    typeof value.observed_at === "string" && typeof value.low_health === "boolean";
+}
+
+function isGameplayEvent(value: unknown): value is GameplayEvent {
+  return isRecord(value) && typeof value.id === "string" && typeof value.type === "string" &&
+    value.category === "gameplay" && ["info", "warning", "critical"].includes(value.severity as string) &&
+    typeof value.timestamp === "string" && isRecord(value.source) &&
+    typeof value.source.agent_id === "string" && typeof value.source.integration === "string" &&
+    isRecord(value.payload);
 }
 
 function isServiceState(value: unknown): value is ServiceState {
@@ -198,11 +235,24 @@ export function parseStateMessage(rawMessage: string): OlympusState | null {
     machines: Object.fromEntries(Object.entries(value.machines).map(([id, machine]) =>
       [id, normalizeMachine(machine as unknown as MachineState)])),
     media: (value.media as MediaState | null | undefined) ?? null,
-    gaming: (value.gaming as GamingState | null | undefined) ?? null,
+    gaming: value.gaming ? {
+      ...(value.gaming as unknown as GamingState),
+      integration: (value.gaming.integration as GamingState["integration"] | undefined) ?? null,
+      minecraft: (value.gaming.minecraft as GamingState["minecraft"] | undefined) ?? null,
+    } : null,
     core_host: (value.core_host as CoreHostState | null | undefined) ?? null,
     network: (value.network as NetworkState | null | undefined) ?? null,
     services: (value.services as Record<string, ServiceState> | undefined) ?? {},
     alerts: (value.alerts as ActiveAlert[] | undefined) ?? [],
     recoveries: (value.recoveries as RecoveryNotice[] | undefined) ?? [],
   };
+}
+
+export function parseDisplayMessage(rawMessage: string): OlympusState | DisplayEventMessage | null {
+  let value: unknown;
+  try { value = JSON.parse(rawMessage); } catch { return null; }
+  if (isRecord(value) && value.type === "event" && isGameplayEvent(value.event)) {
+    return value as unknown as DisplayEventMessage;
+  }
+  return parseStateMessage(rawMessage);
 }

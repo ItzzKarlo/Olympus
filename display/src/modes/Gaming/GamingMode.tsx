@@ -3,6 +3,7 @@ import { ConnectionStatus } from "../../components/ConnectionStatus";
 import type { ConnectionStatus as Status, OlympusState } from "../../types/state";
 import { formatBytes, formatLatency, formatMemory, formatSessionDuration } from "../../utils/format";
 import { getGamePresentation } from "./gameThemes";
+import { MinecraftGamingScene } from "./MinecraftGamingScene";
 
 interface GamingModeProps {
   connectionStatus: Status;
@@ -30,6 +31,9 @@ export function GamingMode({ connectionStatus, now, state }: GamingModeProps) {
   const gaming = state.gaming;
   if (!gaming) return null;
   const machine = state.active_device ? state.machines[state.active_device] : undefined;
+  if (gaming.game.id === "minecraft" && gaming.minecraft) {
+    return <MinecraftGamingScene connectionStatus={connectionStatus} machine={machine} minecraft={gaming.minecraft} now={now} sessionStartedAt={gaming.session_started_at} />;
+  }
   const presentation = getGamePresentation(gaming.game.id, gaming.game.name);
   const startedAt = Date.parse(gaming.session_started_at);
   const sessionSeconds = Number.isFinite(startedAt) ? (now.getTime() - startedAt) / 1000 : 0;
@@ -61,6 +65,7 @@ export function GamingMode({ connectionStatus, now, state }: GamingModeProps) {
             <strong>{machine?.hostname ?? "Active gaming machine"}</strong>
             {machine?.gpu?.name ? <small>{machine.gpu.name}</small> : null}
           </div>
+          {gaming.game.id === "minecraft" ? <p className="gaming-integration-unavailable">Deep integration unavailable</p> : null}
         </div>
 
         <div className="gaming-session">

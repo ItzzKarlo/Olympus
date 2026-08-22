@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { fallbackMediaTheme, mediaThemeFromArtwork } from "../theme/mediaPalette";
 import { getGamePresentation } from "../modes/Gaming/gameThemes";
+import { getMinecraftDimensionTheme } from "../modes/Gaming/minecraftThemes";
 import type { SceneTheme } from "../theme/SceneTheme";
 import { developmentTheme, idleTheme } from "../theme/themes";
 import type { OlympusState } from "../types/state";
@@ -30,6 +31,9 @@ export function useSceneTheme(state: OlympusState | null): SceneTheme {
   }, [artworkUrl, key]);
 
   if (state?.mode === "gaming" && state.gaming) {
+    if (state.gaming.game.id === "minecraft" && state.gaming.minecraft) {
+      return getMinecraftDimensionTheme(state.gaming.minecraft.world.dimension);
+    }
     return getGamePresentation(state.gaming.game.id, state.gaming.game.name).theme;
   }
   if (state?.mode === "development") return developmentTheme;

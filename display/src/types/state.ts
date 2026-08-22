@@ -183,6 +183,74 @@ export interface GamingState {
   game: GameInfo;
   session_started_at: string;
   fps: number | null;
+  integration: GamingIntegration | null;
+  minecraft: MinecraftState | null;
+}
+
+export interface IntegrationObserver {
+  id: string;
+  name: string;
+  version: string;
+}
+
+export interface GamingIntegration {
+  type: string;
+  available: boolean;
+  connected: boolean;
+  last_seen: string;
+  observer: IntegrationObserver;
+}
+
+export interface MinecraftConnection {
+  type: "singleplayer" | "multiplayer";
+  server_name: string | null;
+  server_address: string | null;
+  world_name: string | null;
+}
+
+export interface MinecraftPosition {
+  x: number | null;
+  y: number | null;
+  z: number | null;
+}
+
+export interface MinecraftExperience {
+  level: number | null;
+  progress: number | null;
+}
+
+export interface MinecraftPlayer {
+  position: MinecraftPosition;
+  health: number | null;
+  max_health: number | null;
+  food: number | null;
+  max_food: number | null;
+  armor: number | null;
+  experience: MinecraftExperience | null;
+  game_mode: "survival" | "creative" | "adventure" | "spectator" | "unknown";
+}
+
+export interface MinecraftState {
+  connection: MinecraftConnection;
+  world: { dimension: string; biome: string };
+  player: MinecraftPlayer;
+  observed_at: string;
+  low_health: boolean;
+}
+
+export interface GameplayEvent {
+  id: string;
+  type: string;
+  category: "gameplay";
+  severity: "info" | "warning" | "critical";
+  timestamp: string;
+  source: { agent_id: string; integration: string };
+  payload: Record<string, unknown>;
+}
+
+export interface DisplayEventMessage {
+  type: "event";
+  event: GameplayEvent;
 }
 
 export interface OlympusState {
