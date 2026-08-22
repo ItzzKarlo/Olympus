@@ -116,8 +116,18 @@ class ApiFootballProvider:
                 ),
                 None,
             )
-        if active is None and next_match is not None and next_match.kickoff - now <= timedelta(hours=24):
-            active = next_match
+        if active is None:
+            # A cached schedule can still say NS for a short time after kickoff.
+            # Keep querying that fixture's detail endpoint so live discovery does
+            # not wait for the next 30-minute schedule refresh.
+            active = next(
+                (
+                    match for match in matches
+                    if match.status == MatchPhase.UPCOMING
+                    and -timedelta(hours=4) <= match.kickoff - now <= timedelta(hours=24)
+                ),
+                None,
+            )
 
         detail: Any = None
         if active is not None:

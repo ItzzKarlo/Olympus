@@ -169,6 +169,28 @@ class ApiFootballProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("team=157", calls[0])
         self.assertIn("id=9001", calls[1])
 
+    async def test_checks_fixture_detail_when_cached_schedule_is_still_not_started_after_kickoff(self) -> None:
+        calls: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(str(request.url))
+            payload = raw_fixture("NS") if len(calls) == 1 else raw_fixture("2H")
+            return httpx.Response(200, json={"errors": {}, "response": [payload]})
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        provider = ApiFootballProvider(
+            SETTINGS,
+            client,
+            clock=lambda: datetime(2026, 8, 29, 17, 10, tzinfo=timezone.utc),
+            monotonic_clock=lambda: 10,
+        )
+        state = await provider.fetch()
+
+        self.assertEqual(state.match.status, MatchPhase.LIVE)
+        self.assertIsNone(state.next_match)
+        self.assertEqual(len(calls), 2)
+        self.assertIn("id=9001", calls[1])
+
     async def test_rate_limit_and_malformed_responses_are_explicit(self) -> None:
         limited = httpx.AsyncClient(transport=httpx.MockTransport(
             lambda request: httpx.Response(429, headers={"Retry-After": "42"}),

@@ -78,7 +78,7 @@ Agents send this information to the Olympus Core.
 ## Architecture
 
 ```text
-Agents · Spotify · Weather · Google Calendar
+Agents · Spotify · Weather · Google Calendar · API-Football
 Network/service monitors · Local app integrations
                          │
                          ▼
@@ -96,14 +96,14 @@ machine Agent:
 Minecraft + Fabric observer → localhost Agent → Core → Display
 ```
 
-Olympus v0.8 implements this full local path. Agents own device-specific
+Olympus v0.9 implements this full local path. Agents own device-specific
 observation, Core owns interpretation and monitoring, and the Display consumes
 only Core's normalized state.
 
-Activity priority remains:
+Normal scene priority is explicit and phase-aware:
 
 ```text
-GAMING > DEVELOPMENT > MEDIA
+LIVE MATCHDAY > GAMING > DEVELOPMENT > PRE/POST MATCHDAY > MEDIA
 ```
 
 When no activity is active, Core chooses `NIGHT` during the configured night
@@ -336,6 +336,102 @@ GAMING > DEVELOPMENT > MEDIA > IDLE
 
 Night currently changes software presentation only. It does not control
 physical monitor brightness, audio, HDMI/display power, or any room hardware.
+
+## Matchday
+
+Olympus v0.9 adds an optional, read-only FC Bayern München context backed by
+[API-Football v3](https://www.api-football.com/documentation-v3). Core owns the
+provider boundary and converts fixtures, status, provider clock, score, events,
+lineups, and team statistics into Olympus models before anything reaches the
+Display. Missing lineups or statistics are simply omitted.
+
+Enable the provider in the ignored `core/config.toml`:
+
+```toml
+[football]
+enabled = true
+provider = "api-football"
+team_id = "157"
+tracked_id = "bayern"
+team_name = "FC Bayern München"
+team_short_name = "Bayern"
+team_code = "FCB"
+timezone = "Europe/Berlin"
+poll_upcoming_minutes = 30
+poll_near_match_minutes = 5
+poll_pre_match_seconds = 60
+poll_live_seconds = 15
+poll_half_time_seconds = 30
+poll_post_match_seconds = 60
+live_stale_seconds = 60
+unavailable_seconds = 900
+
+[football.matchday]
+pre_match_minutes = 60
+post_match_minutes = 20
+```
+
+Put the API key in `core/.env`, never in TOML or browser code:
+
+```dotenv
+OLYMPUS_FOOTBALL_API_KEY=your_api_football_key
+```
+
+Then start Core with `--env-file .env`. API-Football exposes per-league and
+season coverage flags, so availability still depends on the competition and
+provider plan. Check the provider's current [coverage](https://www.api-football.com/coverage)
+and [rate-limit guidance](https://www.api-football.com/news/post/how-ratelimit-works)
+before choosing polling intervals. The default 15-second live interval expects
+a quota that can sustain live use; the provider's small free allowance is useful
+for setup but is not enough for a full match at that cadence.
+
+Polling adapts to match proximity: the cached schedule refreshes every 30
+minutes, changes to five-minute checks inside 24 hours, one-minute pre-match
+checks, 15-second live checks, 30-second half-time checks, and one-minute
+post-match checks. `429` responses respect provider retry guidance. Timeouts,
+invalid responses, authorization failures, and outages never destabilize Core.
+During a live interruption, Olympus retains the last trusted score, first marks
+it stale, then marks the provider unavailable while preserving Matchday until
+data recovers.
+
+More than 60 minutes before kickoff, Idle and Night may show a subtle next-match
+note without a scene takeover. During pre-match and the 20-minute post-match
+window, Gaming and Development still win, Matchday wins over Media and the
+fallback scenes, and Night only affects the surrounding time policy. Once the
+provider declares the match live, Matchday becomes the highest normal scene
+priority. Full-time stays visible through the configured post-match window.
+
+The v0.9 Display provides a 1080p-oriented pre-match scene, optional starting
+XI, live/HT/FT score presentation, recent major events, basic available team
+statistics, a prominent Bayern goal reaction, and a restrained opponent-goal
+reaction. Score and clock always come from the latest normalized provider state;
+transient events never increment the score themselves.
+
+For development without live football or an API quota, use the supported local
+fixture provider. It exercises the real collector, state resolver, event hub,
+WebSocket, and Display path:
+
+```bash
+cd core
+export OLYMPUS_CONFIG=/absolute/path/to/simulation-config.toml
+export OLYMPUS_FOOTBALL_FIXTURE_PATH=/tmp/olympus-football.json
+.venv/bin/python tools/football_simulator.py upcoming --output "$OLYMPUS_FOOTBALL_FIXTURE_PATH"
+.venv/bin/python -m uvicorn olympus_core.main:app --reload
+```
+
+Set `football.provider = "fixture"` in that simulation config, then advance a
+single phase or run the complete flow in another terminal:
+
+```bash
+.venv/bin/python tools/football_simulator.py goal --output /tmp/olympus-football.json
+.venv/bin/python tools/football_simulator.py sequence --delay 16 --output /tmp/olympus-football.json
+```
+
+The fixture provider is enabled only through explicit development configuration;
+fake match data is not built into production state. v0.9 deliberately does not
+include a ball map, advanced ratings/player analytics, audio, lighting, betting,
+predictions, controls, standings, or news. Those richer presentation ideas begin
+with v0.10 rather than weakening the trustworthiness of this foundation.
 
 ## Weather setup
 
@@ -598,7 +694,7 @@ When the Display is not running on Hermes itself, configure the Core endpoint:
 VITE_OLYMPUS_CORE_WS=ws://10.10.0.10:8000/ws/display npm run dev
 ```
 
-For v0.8, the Display is a browser-based development UI. It is not yet packaged
+For v0.9, the Display is a browser-based development UI. It is not yet packaged
 or deployed as a kiosk.
 
 ## Test
@@ -625,6 +721,7 @@ gradle build
 
 The current milestone does not include a database, Olympus authentication,
 Docker, kiosk packaging, application control, audio/RGB output, physical display
-control, Matchday, or News. FPS remains an optional external Windows input, and
+control, advanced Matchday analytics, or News. FPS remains an optional external
+Windows input, and
 unavailable metrics are omitted. macOS and Windows CPU temperature remain
 unavailable unless a future reliable local provider is added.
