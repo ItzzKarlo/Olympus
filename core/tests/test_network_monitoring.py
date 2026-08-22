@@ -30,7 +30,7 @@ class NetworkCollectorTests(unittest.IsolatedAsyncioTestCase):
             events,
             FakeProbes(
                 {
-                    "gateway": ProbeResult(True, 0.8),
+                    "gateway": ProbeResult(True, 0.8, host="192.168.178.1", source="auto"),
                     "internet": ProbeResult(True, 14.2),
                     "dns": ProbeResult(True, 8.4),
                     "https": ProbeResult(False),
@@ -41,6 +41,8 @@ class NetworkCollectorTests(unittest.IsolatedAsyncioTestCase):
         state = await collector.poll_once()
 
         self.assertEqual(state.gateway.status, ProbeStatus.UP)
+        self.assertEqual(state.gateway.host, "192.168.178.1")
+        self.assertEqual(state.gateway.source, "auto")
         self.assertEqual(state.dns.status, ProbeStatus.UP)
         self.assertEqual(state.internet.status, ProbeStatus.UP)
         self.assertEqual(state.https.status, ProbeStatus.DOWN)

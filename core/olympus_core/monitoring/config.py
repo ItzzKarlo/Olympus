@@ -34,7 +34,7 @@ class NetworkConfig:
     enabled: bool = True
     poll_seconds: float = 5.0
     timeout_seconds: float = 2.0
-    gateway: str = "10.10.0.1"
+    gateway: str = "auto"
     gateway_port: int = 53
     internet_host: str = "1.1.1.1"
     internet_port: int = 443
@@ -109,7 +109,7 @@ def parse_monitoring_config(data: dict[str, Any]) -> MonitoringConfig:
             enabled=bool(network_data.get("enabled", True)),
             poll_seconds=_positive(network_data.get("poll_seconds"), 5.0),
             timeout_seconds=_positive(network_data.get("timeout_seconds"), 2.0),
-            gateway=str(network_data.get("gateway", "10.10.0.1")),
+            gateway=str(network_data.get("gateway", "auto")),
             gateway_port=int(network_data.get("gateway_port", 53)),
             internet_host=str(network_data.get("internet_host", "1.1.1.1")),
             internet_port=int(network_data.get("internet_port", 443)),

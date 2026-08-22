@@ -10,6 +10,8 @@ import httpx
 class ProbeResult:
     success: bool
     latency_ms: float | None = None
+    host: str | None = None
+    source: str | None = None
 
 
 async def tcp_probe(

@@ -9,12 +9,14 @@ import httpx
 
 from olympus_core.models.monitoring import (
     EventSeverity,
+    GatewayProbeState,
     NetworkState,
     NetworkTargetState,
     ProbeState,
     ProbeStatus,
 )
 from olympus_core.monitoring.config import NetworkConfig
+from olympus_core.monitoring.gateway import resolve_gateway
 from olympus_core.monitoring.probes import ProbeResult, dns_probe, http_probe, tcp_probe
 from olympus_core.monitoring.transitions import StatusTransition, TransitionTracker
 from olympus_core.services.events import EventService
@@ -33,15 +35,18 @@ class DefaultNetworkProbeSet:
         self._client = client
 
     async def probe_all(self, config: NetworkConfig) -> dict[str, ProbeResult]:
+        gateway = await resolve_gateway(config.gateway)
         names = ["gateway", "internet", "dns", "https"] + [
             f"target:{target.id}" for target in config.targets
         ]
         checks = [
-            tcp_probe(
-                config.gateway,
-                config.gateway_port,
-                config.timeout_seconds,
-                refused_is_reachable=True,
+            (
+                self._gateway_probe(gateway.host, gateway.source, config)
+                if gateway is not None
+                else asyncio.sleep(
+                    0,
+                    result=ProbeResult(False, host=None, source="auto"),
+                )
             ),
             tcp_probe(config.internet_host, config.internet_port, config.timeout_seconds),
             dns_probe(config.dns_hostname, config.timeout_seconds),
@@ -52,6 +57,25 @@ class DefaultNetworkProbeSet:
             ],
         ]
         return dict(zip(names, await asyncio.gather(*checks), strict=True))
+
+    async def _gateway_probe(
+        self,
+        host: str,
+        source: str,
+        config: NetworkConfig,
+    ) -> ProbeResult:
+        result = await tcp_probe(
+            host,
+            config.gateway_port,
+            config.timeout_seconds,
+            refused_is_reachable=True,
+        )
+        return ProbeResult(
+            result.success,
+            result.latency_ms,
+            host=host,
+            source=source,
+        )
 
 
 class NetworkCollector:
@@ -103,8 +127,15 @@ class NetworkCollector:
             )
             for target in self._config.targets
         }
+        gateway_result = results.get("gateway", ProbeResult(False, source="auto"))
         state = NetworkState(
-            gateway=states["gateway"],
+            gateway=GatewayProbeState(
+                **states["gateway"].model_dump(),
+                host=gateway_result.host,
+                source=gateway_result.source or (
+                    "auto" if self._config.gateway.casefold() == "auto" else "configured"
+                ),
+            ),
             dns=states["dns"],
             internet=states["internet"],
             https=states["https"],

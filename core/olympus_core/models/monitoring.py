@@ -19,13 +19,18 @@ class ProbeState(BaseModel):
     last_checked: datetime | None = None
 
 
+class GatewayProbeState(ProbeState):
+    host: str | None = None
+    source: str = "auto"
+
+
 class NetworkTargetState(ProbeState):
     id: str
     name: str
 
 
 class NetworkState(BaseModel):
-    gateway: ProbeState = Field(default_factory=ProbeState)
+    gateway: GatewayProbeState = Field(default_factory=GatewayProbeState)
     dns: ProbeState = Field(default_factory=ProbeState)
     internet: ProbeState = Field(default_factory=ProbeState)
     https: ProbeState = Field(default_factory=ProbeState)
