@@ -1,5 +1,6 @@
 import { Brand } from "./components/Brand";
 import { ConnectionStatus } from "./components/ConnectionStatus";
+import { ParticleField } from "./components/ParticleField";
 import { useClock } from "./hooks/useClock";
 import { useOlympusState } from "./hooks/useOlympusState";
 import { DevelopmentMode } from "./modes/Development/DevelopmentMode";
@@ -8,6 +9,7 @@ import { IdleMode } from "./modes/Idle/IdleMode";
 function StartupScreen() {
   return (
     <main className="startup-screen">
+      <ParticleField />
       <Brand />
       <div className="startup-screen__message">
         <span className="startup-screen__orbit" aria-hidden="true" />
@@ -39,6 +41,7 @@ export default function App() {
 
   return (
     <main className={`olympus-display mode-${state.mode}`}>
+      <ParticleField />
       <div key={state.mode} className="scene-transition">
         {scene}
       </div>
