@@ -3,7 +3,7 @@ import type {
   MachineState, MediaAlbum, MediaArtist, MediaContext, MediaQueueTrack,
   MediaState, MediaTrack, NetworkState, NetworkTelemetry, OlympusState,
   ProbeState, RecoveryNotice, ServiceState, StorageTelemetry, SystemTelemetry,
-  TemperatureTelemetry, WeatherCondition, WeatherState,
+  TemperatureTelemetry, TimePolicyState, WeatherCondition, WeatherState,
 } from "../types/state";
 
 export const DEFAULT_CORE_WS = "ws://127.0.0.1:8000/ws/display";
@@ -25,7 +25,7 @@ function isOptionalNumber(value: unknown): value is number | null | undefined {
 }
 
 function isActivityMode(value: unknown): value is ActivityMode {
-  return ["idle", "development", "gaming", "media", "unknown"].includes(value as string);
+  return ["idle", "development", "gaming", "media", "night", "unknown"].includes(value as string);
 }
 
 function isSystemTelemetry(value: unknown): value is SystemTelemetry {
@@ -220,6 +220,12 @@ function isCalendarState(value: unknown): value is CalendarState {
     (value.next_event === null || isCalendarEvent(value.next_event));
 }
 
+function isTimePolicyState(value: unknown): value is TimePolicyState {
+  return isRecord(value) && typeof value.is_night === "boolean" &&
+    isNullableString(value.period_started_at) && isNullableString(value.period_ends_at) &&
+    isNullableString(value.next_transition_at);
+}
+
 function isServiceState(value: unknown): value is ServiceState {
   return isRecord(value) && typeof value.id === "string" && typeof value.name === "string" &&
     isProbeState(value) && (value.last_changed === null || typeof value.last_changed === "string");
@@ -274,6 +280,7 @@ export function parseStateMessage(rawMessage: string): OlympusState | null {
     !(value.timezone === undefined || typeof value.timezone === "string") ||
     !(value.weather === undefined || value.weather === null || isWeatherState(value.weather)) ||
     !(value.calendar === undefined || value.calendar === null || isCalendarState(value.calendar)) ||
+    !(value.time_policy === undefined || isTimePolicyState(value.time_policy)) ||
     !(value.core_host === undefined || value.core_host === null || isCoreHostState(value.core_host)) ||
     !(value.network === undefined || value.network === null || isNetworkState(value.network)) ||
     !(value.services === undefined || (isRecord(value.services) && Object.values(value.services).every(isServiceState))) ||
@@ -289,6 +296,12 @@ export function parseStateMessage(rawMessage: string): OlympusState | null {
     timezone: (value.timezone as string | undefined) ?? "UTC",
     weather: (value.weather as WeatherState | null | undefined) ?? null,
     calendar: (value.calendar as CalendarState | null | undefined) ?? null,
+    time_policy: (value.time_policy as TimePolicyState | undefined) ?? {
+      is_night: false,
+      period_started_at: null,
+      period_ends_at: null,
+      next_transition_at: null,
+    },
     gaming: value.gaming ? {
       ...(value.gaming as unknown as GamingState),
       integration: (value.gaming.integration as GamingState["integration"] | undefined) ?? null,

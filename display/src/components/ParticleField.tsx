@@ -73,7 +73,7 @@ export function ParticleField({ theme }: ParticleFieldProps) {
 
     const createParticles = () => {
       const mobile = width < 720;
-      const density = Math.min(1.35, Math.max(0.6, themeRef.current?.density ?? 1));
+      const density = Math.min(1.35, Math.max(0.2, themeRef.current?.density ?? 1));
       const count = Math.min(
         mobile ? 44 : 96,
         Math.round(((width * height) / (mobile ? 17_000 : 19_000)) * density),
@@ -108,7 +108,7 @@ export function ParticleField({ theme }: ParticleFieldProps) {
         }
 
         const direction = Math.random() * Math.PI * 2;
-        const speedScale = Math.min(1.55, Math.max(0.55, themeRef.current?.speed ?? 1));
+        const speedScale = Math.min(1.55, Math.max(0.3, themeRef.current?.speed ?? 1));
         const speed = (0.07 + Math.random() * 0.11) * speedScale;
         const colorIndex = index % paletteRef.current.length;
         nextParticles.push({
@@ -233,7 +233,7 @@ export function ParticleField({ theme }: ParticleFieldProps) {
           particle.vy *= 0.9995;
 
           const speed = Math.hypot(particle.vx, particle.vy);
-          const maximumSpeed = MAX_SPEED * Math.min(1.55, Math.max(0.55, themeRef.current?.speed ?? 1));
+          const maximumSpeed = MAX_SPEED * Math.min(1.55, Math.max(0.3, themeRef.current?.speed ?? 1));
           if (speed > maximumSpeed) {
             particle.vx = (particle.vx / speed) * maximumSpeed;
             particle.vy = (particle.vy / speed) * maximumSpeed;

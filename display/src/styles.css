@@ -43,6 +43,24 @@
   initial-value: #5b6fd8;
 }
 
+@property --surface {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #ffffff;
+}
+
+@property --surface-alt {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #eceae4;
+}
+
+@property --line {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #dad8d1;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -75,11 +93,14 @@ select {
   color: var(--text);
   background: var(--ambient), var(--background);
   transition:
-    --background 650ms ease,
-    --text 650ms ease,
-    --accent 650ms ease,
-    background-color 650ms ease,
-    color 650ms ease;
+    --background 1100ms ease,
+    --surface 1100ms ease,
+    --surface-alt 1100ms ease,
+    --line 1100ms ease,
+    --text 1100ms ease,
+    --accent 1100ms ease,
+    background-color 1100ms ease,
+    color 1100ms ease;
 }
 
 .olympus-display::before,
@@ -377,6 +398,151 @@ select {
 .ambient-idle-stage:not(:has(.ambient-next)):not(:has(.ambient-calendar)) .ambient-weather { justify-self: center; }
 .ambient-idle-stage:not(:has(.ambient-next)):not(:has(.ambient-calendar)) .ambient-weather__current,
 .ambient-idle-stage:not(:has(.ambient-next)):not(:has(.ambient-calendar)) .ambient-weather__details { justify-content: center; }
+
+.scene--night {
+  isolation: isolate;
+}
+
+.night-stage {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1.25fr) minmax(22rem, .75fr);
+  gap: clamp(4rem, 9vw, 11rem);
+  align-items: center;
+  width: min(100%, 112rem);
+  margin: 0 auto;
+  padding: clamp(3rem, 7vh, 7rem) 0 clamp(2rem, 4vh, 4rem);
+}
+
+.night-primary {
+  min-width: 0;
+}
+
+.night-clock {
+  display: block;
+  margin-top: .04em;
+  font-size: clamp(7rem, 15vw, 16rem);
+  font-weight: 220;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.09em;
+  line-height: .8;
+  text-shadow: 0 1.2rem 5rem rgba(0, 0, 0, .18);
+}
+
+.night-date {
+  margin: clamp(1.2rem, 2.5vh, 2.2rem) 0 0 .5rem;
+  color: var(--muted);
+  font-size: clamp(1.05rem, 1.8vw, 1.8rem);
+  font-weight: 340;
+}
+
+.night-weather {
+  display: flex;
+  align-items: center;
+  gap: clamp(1.1rem, 2vw, 2rem);
+  width: fit-content;
+  margin-top: clamp(2.6rem, 6vh, 5.8rem);
+  padding-top: clamp(1rem, 2vh, 1.8rem);
+  border-top: 1px solid var(--line);
+}
+
+.night-weather > strong {
+  color: var(--accent);
+  font-size: clamp(3rem, 4.8vw, 5.2rem);
+  font-weight: 260;
+  letter-spacing: -.07em;
+  line-height: .88;
+}
+
+.night-weather > div {
+  display: grid;
+  gap: .42rem;
+}
+
+.night-weather span {
+  font-size: clamp(.9rem, 1.2vw, 1.2rem);
+}
+
+.night-weather small {
+  color: var(--quiet);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: .62rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.night-agenda {
+  display: grid;
+  gap: clamp(3rem, 7vh, 6rem);
+  padding-left: clamp(1.8rem, 3vw, 3.8rem);
+  border-left: 1px solid var(--line);
+}
+
+.night-next h1 {
+  max-width: 13ch;
+  margin: .7rem 0 0;
+  font-size: clamp(2.8rem, 5vw, 5.7rem);
+  font-weight: 270;
+  letter-spacing: -.06em;
+  line-height: .94;
+  text-wrap: balance;
+}
+
+.night-next > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem 1.2rem;
+  margin-top: 1.25rem;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: .68rem;
+  text-transform: uppercase;
+}
+
+.night-next time { color: var(--accent); }
+.night-next span { color: var(--quiet); }
+
+.night-tomorrow > header {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: .65rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--quiet);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: .6rem;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+}
+
+.night-tomorrow header small { color: var(--accent); font: inherit; }
+.night-tomorrow ol { margin: 0; padding: 0; list-style: none; }
+.night-tomorrow li { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); align-items: center; gap: 1rem; min-height: clamp(3.2rem, 5.5vh, 4.5rem); border-bottom: 1px solid color-mix(in srgb, var(--line) 68%, transparent); }
+.night-tomorrow li time { color: var(--accent); font-family: "SFMono-Regular", Consolas, monospace; font-size: .66rem; text-transform: uppercase; }
+.night-tomorrow li div { display: grid; gap: .15rem; min-width: 0; }
+.night-tomorrow li strong { overflow: hidden; font-size: clamp(.84rem, 1vw, 1rem); font-weight: 440; text-overflow: ellipsis; white-space: nowrap; }
+.night-tomorrow li small { overflow: hidden; color: var(--quiet); font-size: .6rem; text-overflow: ellipsis; white-space: nowrap; }
+
+.scene--night > .ambient-status {
+  position: relative;
+  z-index: 2;
+  margin: 0;
+  padding-top: clamp(.7rem, 1.5vh, 1.4rem);
+  border-top: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
+}
+
+.night-stage:not(:has(.night-agenda)) {
+  grid-template-columns: 1fr;
+}
+
+.night-stage:not(:has(.night-agenda)) .night-primary {
+  justify-self: center;
+  text-align: center;
+}
+
+.night-stage:not(:has(.night-agenda)) .night-weather {
+  margin-inline: auto;
+}
 
 .device-section {
   width: 100%;
@@ -1215,6 +1381,18 @@ select {
 .gameplay-event--dimension { display: grid; align-items: end; justify-items: center; padding: clamp(2rem, 5vw, 5rem); }
 .gameplay-event__notice { padding: .8rem 1.1rem; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: 999px; background: var(--panel); color: var(--accent); box-shadow: 0 .8rem 2.5rem color-mix(in srgb, var(--text) 12%, transparent); font-family: "SFMono-Regular", Consolas, monospace; font-size: .65rem; letter-spacing: .12em; text-transform: uppercase; backdrop-filter: blur(12px); }
 
+.policy-night .gameplay-event--damage {
+  box-shadow: inset 0 0 clamp(5rem, 16vw, 15rem) rgba(173, 43, 51, .42);
+}
+
+.policy-night .gameplay-event--healing {
+  background: radial-gradient(circle, transparent 42%, rgba(65, 138, 91, .1));
+}
+
+.policy-night .gameplay-event--dimension {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
 @keyframes minecraft-damage { 0% { opacity: 0; } 20% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes minecraft-healing { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes minecraft-dimension { 0%, 100% { opacity: 0; } 42% { opacity: 1; } }
@@ -1324,6 +1502,32 @@ select {
   background: rgba(42, 31, 27, 0.93);
   color: #fff9f5;
   box-shadow: 0 3rem 8rem rgba(24, 12, 8, 0.36);
+}
+
+.policy-night .event-overlay::before {
+  background: rgba(3, 5, 9, .68);
+  backdrop-filter: blur(22px) saturate(.58);
+}
+
+.policy-night .event-overlay__panel {
+  border-color: rgba(190, 198, 214, .17);
+  background: rgba(12, 15, 22, .97);
+  color: #e8e9eb;
+  box-shadow: 0 3rem 9rem rgba(0, 0, 0, .56);
+}
+
+.policy-night .event-overlay--info .event-overlay__panel {
+  border-color: rgba(92, 135, 169, .2);
+  box-shadow: 0 2.2rem 6rem rgba(0, 0, 0, .4);
+}
+
+.policy-night .event-overlay--info .event-overlay__panel::before {
+  background: #456f91;
+}
+
+.policy-night .event-overlay--critical .event-overlay__panel {
+  border-color: rgba(220, 102, 94, .42);
+  box-shadow: 0 3rem 10rem rgba(84, 19, 17, .48);
 }
 
 .event-overlay__panel::before {
@@ -1633,6 +1837,11 @@ select {
   .ambient-calendar { grid-column: 1; }
   .ambient-clock__time { font-size: clamp(6rem, 22vw, 11rem); }
 
+  .night-stage { grid-template-columns: 1fr; gap: 3.5rem; align-items: start; }
+  .night-clock { font-size: clamp(7rem, 24vw, 12rem); }
+  .night-agenda { padding-left: 0; padding-top: 2rem; border-top: 1px solid var(--line); border-left: 0; }
+  .night-next h1 { max-width: 18ch; }
+
   .media-header__status {
     align-items: flex-end;
     flex-direction: column-reverse;
@@ -1760,6 +1969,11 @@ select {
   .ambient-calendar { grid-template-columns: 1fr; gap: 2rem; }
   .idle-agenda li { grid-template-columns: 4rem minmax(0, 1fr); }
   .idle-agenda li > span { display: none; }
+
+  .night-stage { gap: 2.5rem; padding-top: 4rem; }
+  .night-clock { font-size: clamp(5.5rem, 27vw, 8rem); }
+  .night-weather { margin-top: 2.5rem; }
+  .night-agenda { gap: 2.5rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

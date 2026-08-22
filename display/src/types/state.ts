@@ -3,6 +3,7 @@ export type ActivityMode =
   | "development"
   | "gaming"
   | "media"
+  | "night"
   | "unknown";
 
 export interface SystemTelemetry {
@@ -317,6 +318,13 @@ export interface CalendarState {
   next_event: CalendarEvent | null;
 }
 
+export interface TimePolicyState {
+  is_night: boolean;
+  period_started_at: string | null;
+  period_ends_at: string | null;
+  next_transition_at: string | null;
+}
+
 export interface OlympusState {
   type: "state";
   mode: ActivityMode;
@@ -326,6 +334,7 @@ export interface OlympusState {
   timezone: string;
   weather: WeatherState | null;
   calendar: CalendarState | null;
+  time_policy: TimePolicyState;
   gaming: GamingState | null;
   media: MediaState | null;
   core_host: CoreHostState | null;

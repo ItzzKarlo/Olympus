@@ -6,6 +6,7 @@ import { getMinecraftDimensionTheme } from "../modes/Gaming/minecraftThemes";
 import type { SceneTheme } from "../theme/SceneTheme";
 import { developmentTheme, idleTheme } from "../theme/themes";
 import { getIdleWeatherTheme } from "../theme/idleWeatherTheme";
+import { applyNightAdaptation, getNightTheme } from "../theme/nightTheme";
 import type { OlympusState } from "../types/state";
 
 interface ResolvedMediaTheme {
@@ -31,16 +32,24 @@ export function useSceneTheme(state: OlympusState | null): SceneTheme {
     };
   }, [artworkUrl, key]);
 
+  let theme: SceneTheme;
   if (state?.mode === "gaming" && state.gaming) {
     if (state.gaming.game.id === "minecraft" && state.gaming.minecraft) {
-      return getMinecraftDimensionTheme(state.gaming.minecraft.world.dimension);
+      theme = getMinecraftDimensionTheme(state.gaming.minecraft.world.dimension);
+    } else {
+      theme = getGamePresentation(state.gaming.game.id, state.gaming.game.name).theme;
     }
-    return getGamePresentation(state.gaming.game.id, state.gaming.game.name).theme;
+  } else if (state?.mode === "development") {
+    theme = developmentTheme;
+  } else if (state?.mode === "media") {
+    theme = mediaTheme?.theme ?? initialFallback;
+  } else if (state?.mode === "night") {
+    return getNightTheme(state.weather?.current?.condition);
+  } else if (state?.mode === "idle" && state.weather?.available) {
+    theme = getIdleWeatherTheme(state.weather.current?.condition);
+  } else {
+    theme = idleTheme;
   }
-  if (state?.mode === "development") return developmentTheme;
-  if (state?.mode === "media") return mediaTheme?.theme ?? initialFallback;
-  if (state?.mode === "idle" && state.weather?.available) {
-    return getIdleWeatherTheme(state.weather.current?.condition);
-  }
-  return idleTheme;
+
+  return state?.time_policy.is_night ? applyNightAdaptation(theme) : theme;
 }

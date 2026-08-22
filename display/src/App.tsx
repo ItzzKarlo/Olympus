@@ -10,6 +10,7 @@ import { DevelopmentMode } from "./modes/Development/DevelopmentMode";
 import { IdleMode } from "./modes/Idle/IdleMode";
 import { GamingMode } from "./modes/Gaming/GamingMode";
 import { MediaMode } from "./modes/Media/MediaMode";
+import { NightMode } from "./modes/Night/NightMode";
 import { sceneStyle } from "./theme/SceneTheme";
 import { idleTheme } from "./theme/themes";
 
@@ -46,14 +47,16 @@ export default function App() {
       />
     ) : state.mode === "media" && state.media?.track ? (
       <MediaMode connectionStatus={connectionStatus} media={state.media} />
+    ) : state.mode === "night" ? (
+      <NightMode connectionStatus={connectionStatus} now={now} state={state} />
     ) : (
       <IdleMode connectionStatus={connectionStatus} now={now} state={state} />
     );
 
   return (
-    <main className={`olympus-display mode-${state.mode}`} style={sceneStyle(theme)}>
+    <main className={`olympus-display mode-${state.mode}${state.time_policy.is_night ? " policy-night" : ""}`} style={sceneStyle(theme)}>
       <ParticleField
-        key={`${state.mode}:${state.gaming?.game.id ?? ""}:${state.weather?.current?.condition ?? ""}`}
+        key={`${state.mode}:${state.gaming?.game.id ?? ""}:${state.weather?.current?.condition ?? ""}:${state.time_policy.is_night}`}
         theme={theme.particles}
       />
       <div key={state.mode} className="scene-transition">
