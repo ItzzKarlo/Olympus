@@ -8,6 +8,7 @@ from olympus_core.config import FootballSettings, parse_core_config
 from olympus_core.integrations.football.api_football import ApiFootballProvider
 from olympus_core.integrations.football.base import FootballProviderError, FootballRateLimitError
 from olympus_core.integrations.football.collector import FootballCollector, MatchdayPolicy
+from olympus_core.integrations.football.fixture import FixtureFootballProvider
 from olympus_core.integrations.football.normalization import (
     normalize_events,
     normalize_fixture,
@@ -222,6 +223,27 @@ class ApiFootballProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.quota.daily_remaining, 24)
         self.assertEqual(state.quota.minute_remaining, 289)
         self.assertTrue(state.quota.low)
+
+
+class FixtureFootballProviderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_development_fixture_can_simulate_critical_quota(self) -> None:
+        import json
+        from dataclasses import replace
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "match.json"
+            path.write_text(json.dumps({
+                "response": [raw_fixture("2H")],
+                "olympus_quota": {"daily_limit": 100, "daily_remaining": 4},
+            }), encoding="utf-8")
+            settings = replace(SETTINGS, provider="fixture", fixture_path=str(path))
+            state = await FixtureFootballProvider(settings).fetch()
+
+        self.assertEqual(state.quota.daily_remaining, 4)
+        self.assertTrue(state.quota.low)
+        self.assertTrue(state.quota.critical)
 
 
 class DummyProvider:

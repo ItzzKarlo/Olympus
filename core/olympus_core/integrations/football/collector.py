@@ -238,10 +238,11 @@ class FootballCollector:
             state = state.model_copy(update={"matchday": context})
         self._last_good = state
         self._last_success_at = tick
+        published = await self._publish(state)
         await self._emit_changes(snapshot, state)
         if snapshot.match is not None:
             await self._emit_rating_changes(snapshot.match.id, snapshot.observed_at, rating_changes)
-        return await self._publish(state)
+        return published
 
     def poll_interval(self, state: FootballState, now: datetime | None = None) -> float:
         if self._retry_after is not None:

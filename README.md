@@ -96,7 +96,7 @@ machine Agent:
 Minecraft + Fabric observer → localhost Agent → Core → Display
 ```
 
-Olympus v0.9 implements this full local path. Agents own device-specific
+Olympus v0.10 implements this full local path. Agents own device-specific
 observation, Core owns interpretation and monitoring, and the Display consumes
 only Core's normalized state.
 
@@ -339,11 +339,12 @@ physical monitor brightness, audio, HDMI/display power, or any room hardware.
 
 ## Matchday
 
-Olympus v0.9 adds an optional, read-only FC Bayern München context backed by
-[API-Football v3](https://www.api-football.com/documentation-v3). Core owns the
-provider boundary and converts fixtures, status, provider clock, score, events,
-lineups, and team statistics into Olympus models before anything reaches the
-Display. Missing lineups or statistics are simply omitted.
+Olympus v0.10 provides an optional, read-only FC Bayern München match center
+backed by [API-Football v3](https://www.api-football.com/documentation-v3).
+Core owns the provider boundary and converts fixtures, score, events, lineups,
+team statistics, and player performance into Olympus models before anything
+reaches the Display. Provider-specific response shapes and credentials never
+reach the browser.
 
 Enable the provider in the ignored `core/config.toml`:
 
@@ -363,12 +364,23 @@ poll_pre_match_seconds = 60
 poll_live_seconds = 15
 poll_half_time_seconds = 30
 poll_post_match_seconds = 60
+poll_team_stats_seconds = 60
+poll_player_stats_seconds = 60
 live_stale_seconds = 60
 unavailable_seconds = 900
+low_quota_remaining = 25
+critical_quota_remaining = 5
+max_history_samples = 96
 
 [football.matchday]
 pre_match_minutes = 60
 post_match_minutes = 20
+
+[football.players]
+# Stable API-Football player IDs are authoritative. Names are supported only
+# as a convenient option for development fixtures.
+watched = ["player-id-1", "player-id-2"]
+rating_change_threshold = 0.25
 ```
 
 Put the API key in `core/.env`, never in TOML or browser code:
@@ -377,22 +389,22 @@ Put the API key in `core/.env`, never in TOML or browser code:
 OLYMPUS_FOOTBALL_API_KEY=your_api_football_key
 ```
 
-Then start Core with `--env-file .env`. API-Football exposes per-league and
-season coverage flags, so availability still depends on the competition and
-provider plan. Check the provider's current [coverage](https://www.api-football.com/coverage)
-and [rate-limit guidance](https://www.api-football.com/news/post/how-ratelimit-works)
-before choosing polling intervals. The default 15-second live interval expects
-a quota that can sustain live use; the provider's small free allowance is useful
-for setup but is not enough for a full match at that cadence.
+Then start Core with `--env-file .env`. Player performance uses the provider's
+fixture player-statistics data, including available minutes, ratings, goals,
+assists, shots, passing, defending, duels, dribbles, cards, and penalties for
+both teams. Every field is optional. Missing coverage removes the corresponding
+presentation rather than manufacturing a zero or an error panel. Ratings are
+always described as provider performance ratings, not objective judgments or an
+official Player of the Match award.
 
-Polling adapts to match proximity: the cached schedule refreshes every 30
-minutes, changes to five-minute checks inside 24 hours, one-minute pre-match
-checks, 15-second live checks, 30-second half-time checks, and one-minute
-post-match checks. `429` responses respect provider retry guidance. Timeouts,
-invalid responses, authorization failures, and outages never destabilize Core.
-During a live interruption, Olympus retains the last trusted score, first marks
-it stale, then marks the provider unavailable while preserving Matchday until
-data recovers.
+Polling adapts to match proximity. Score, status, and events keep the fast live
+cadence (15 seconds by default), while team and player analytics are sampled at
+their slower 60-second update cadence. A combined fixture response avoids extra
+endpoint calls; Core freezes a usable lineup and does not duplicate unchanged
+history samples. Provider quota headers are retained in diagnostics. Low quota
+stretches analytics first, then the fast poll only when the budget is critical.
+`429` responses respect provider retry guidance. Timeouts and outages retain the
+last trusted state, mark it stale, and recover without destabilizing Core.
 
 More than 60 minutes before kickoff, Idle and Night may show a subtle next-match
 note without a scene takeover. During pre-match and the 20-minute post-match
@@ -401,11 +413,35 @@ fallback scenes, and Night only affects the surrounding time policy. Once the
 provider declares the match live, Matchday becomes the highest normal scene
 priority. Full-time stays visible through the configured post-match window.
 
-The v0.9 Display provides a 1080p-oriented pre-match scene, optional starting
-XI, live/HT/FT score presentation, recent major events, basic available team
-statistics, a prominent Bayern goal reaction, and a restrained opponent-goal
-reaction. Score and clock always come from the latest normalized provider state;
-transient events never increment the score themselves.
+The 1080p-oriented Display shows both starting XIs before kickoff, with subtle
+watched-player status. Live, half-time, and full-time retain the dominant score
+and clock while adding watched-player cards, current/final top-rated performers,
+meaningful team statistics, substitutions, cards, scorers, and assists. Full-time
+atmosphere responds to the normalized Bayern-relative `win`, `draw`, or `loss`.
+Transient goal events never increment the score themselves and never wait for a
+slower rating refresh.
+
+### Match Flow
+
+Core keeps bounded, in-memory team-stat and watched-player rating histories for
+the current fixture. Match Flow is an Olympus-derived, smoothed activity view.
+It weights changes in shots, shots on target, and corners, blends available
+possession context, and adds bounded emphasis for supported match events such as
+goals and cards. Values are relative visualization weights—not possession,
+probabilities, xG, or provider-supplied tracking. With only events, it renders a
+reduced flow; with no honest input, it is omitted.
+
+Olympus does not currently know the exact physical position of the ball. Match
+Flow visualizes match evolution from supported statistics and events. Olympus
+does not scrape OneFootball or private APIs, invent spatial coordinates, use
+betting odds, or make predictions. Coverage and update timing vary by competition
+and provider plan.
+
+Histories live only in memory for one active fixture. After a mid-match Core
+restart, current score, events, lineup, statistics, and ratings recover from the
+provider without replaying historical goals or rating changes. Match Flow starts
+an honest new observation history; older event markers remain available, but
+past stat snapshots are not reconstructed or faked.
 
 For development without live football or an API quota, use the supported local
 fixture provider. It exercises the real collector, state resolver, event hub,
@@ -423,15 +459,18 @@ Set `football.provider = "fixture"` in that simulation config, then advance a
 single phase or run the complete flow in another terminal:
 
 ```bash
+.venv/bin/python tools/football_simulator.py ratings --output /tmp/olympus-football.json
 .venv/bin/python tools/football_simulator.py goal --output /tmp/olympus-football.json
 .venv/bin/python tools/football_simulator.py sequence --delay 16 --output /tmp/olympus-football.json
 ```
 
-The fixture provider is enabled only through explicit development configuration;
-fake match data is not built into production state. v0.9 deliberately does not
-include a ball map, advanced ratings/player analytics, audio, lighting, betting,
-predictions, controls, standings, or news. Those richer presentation ideas begin
-with v0.10 rather than weakening the trustworthiness of this foundation.
+The sequence covers pre-match lineups, evolving ratings and statistics, goals,
+half-time, substitutions, opponent events, a red card, win/loss full-time states,
+missing player coverage, quota pressure, and an outage. For fast local sequences,
+set the two analytics polling intervals to one second in the simulation-only
+configuration. The fixture provider remains development-only; fake match data is
+not built into production state. Matchday deliberately excludes audio, lighting,
+betting, predictions, controls, standings, and news.
 
 ## Weather setup
 

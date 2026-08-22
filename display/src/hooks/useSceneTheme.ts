@@ -41,6 +41,7 @@ export function useSceneTheme(state: OlympusState | null): SceneTheme {
         : state.football.matchday.match.home.id,
       state.football.matchday.phase,
       state.time_policy.is_night,
+      state.football.matchday.result,
     );
   }
   if (state?.mode === "gaming" && state.gaming) {

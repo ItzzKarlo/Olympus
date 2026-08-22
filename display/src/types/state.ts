@@ -282,7 +282,12 @@ export interface FootballMatch {
   score: FootballScore;
 }
 
-export interface FootballPlayer { id: string | null; name: string; }
+export interface FootballPlayer {
+  id: string | null;
+  name: string;
+  number: number | null;
+  position: string | null;
+}
 export interface FootballLineupPlayer extends FootballPlayer {
   number: number | null;
   position: string | null;
@@ -315,6 +320,61 @@ export interface FootballStatistics {
   away: FootballTeamStatistics | null;
 }
 
+export interface FootballPlayerStatistics {
+  player: FootballPlayer;
+  team: FootballTeam;
+  for_tracked_team: boolean;
+  minutes: number | null;
+  rating: number | null;
+  starter: boolean | null;
+  goals: number | null;
+  assists: number | null;
+  shots: { total: number | null; on_target: number | null };
+  passes: { total: number | null; key: number | null; accuracy_percent: number | null };
+  defending: { tackles: number | null; interceptions: number | null; blocks: number | null };
+  duels: { total: number | null; won: number | null };
+  dribbles: { attempted: number | null; successful: number | null };
+  fouls: { committed: number | null; drawn: number | null };
+  cards: { yellow: number | null; red: number | null };
+  penalties: { won: number | null; committed: number | null; scored: number | null; missed: number | null; saved: number | null };
+}
+
+export type WatchedPlayerStatus = "starting" | "playing" | "substituted" | "bench" | "unavailable" | "finished";
+export interface WatchedPlayerState {
+  player: FootballPlayer;
+  status: WatchedPlayerStatus;
+  rating: number | null;
+  previous_rating: number | null;
+  rating_delta: number | null;
+  statistics: FootballPlayerStatistics | null;
+}
+
+export interface FootballRatingSample { minute: number | null; rating: number; observed_at: string; }
+export interface FootballPlayerRatingHistory { player: FootballPlayer; samples: FootballRatingSample[]; }
+export interface FootballStatisticsSnapshot {
+  minute: number | null;
+  home: FootballTeamStatistics | null;
+  away: FootballTeamStatistics | null;
+  observed_at: string;
+}
+export interface FootballMatchFlowPoint {
+  minute: number | null;
+  tracked_team: number;
+  opponent: number;
+  basis: "statistics" | "events" | "combined";
+  observed_at: string;
+}
+export type FootballResult = "win" | "draw" | "loss" | "unknown";
+export interface FootballQuotaState {
+  daily_limit: number | null;
+  daily_remaining: number | null;
+  minute_limit: number | null;
+  minute_remaining: number | null;
+  low: boolean;
+  critical: boolean;
+  observed_at: string;
+}
+
 export interface FootballMatchEvent {
   id: string;
   type: FootballEventType;
@@ -326,6 +386,7 @@ export interface FootballMatchEvent {
   score_after: FootballScore | null;
   for_tracked_team: boolean;
   detail: string | null;
+  location: { x: number | null; y: number | null } | null;
 }
 
 export interface MatchdayContext {
@@ -336,6 +397,14 @@ export interface MatchdayContext {
   events: FootballMatchEvent[];
   lineups: FootballLineups | null;
   statistics: FootballStatistics | null;
+  statistics_history: FootballStatisticsSnapshot[];
+  player_statistics: FootballPlayerStatistics[];
+  watched_players: WatchedPlayerState[];
+  top_tracked_players: FootballPlayerStatistics[];
+  top_opponent_players: FootballPlayerStatistics[];
+  rating_history: FootballPlayerRatingHistory[];
+  match_flow: FootballMatchFlowPoint[];
+  result: FootballResult;
   stale: boolean;
   observed_at: string;
 }
@@ -347,6 +416,7 @@ export interface FootballState {
   tracked_team: FootballTeam;
   next_match: FootballMatch | null;
   matchday: MatchdayContext | null;
+  quota: FootballQuotaState | null;
 }
 
 export interface FootballDisplayEvent {
@@ -359,6 +429,10 @@ export interface FootballDisplayEvent {
   payload: {
     match_id?: string;
     event?: FootballMatchEvent;
+    player?: FootballPlayer;
+    previous_rating?: number;
+    rating?: number;
+    delta?: number;
     [key: string]: unknown;
   };
 }

@@ -14,7 +14,7 @@ from olympus_core.integrations.football.normalization import (
     normalize_player_statistics,
     normalize_statistics,
 )
-from olympus_core.models.football import FootballTeam, MatchPhase, ProviderFootballSnapshot
+from olympus_core.models.football import FootballQuotaState, FootballTeam, MatchPhase, ProviderFootballSnapshot
 
 
 class FixtureFootballProvider:
@@ -40,6 +40,19 @@ class FixtureFootballProvider:
         if match is None:
             raise FootballProviderError("Development football fixture is invalid")
         tracked = match.home if match.home.id == self._settings.tracked_id else match.away
+        quota_data = payload.get("olympus_quota") if isinstance(payload, Mapping) else None
+        quota = None
+        if isinstance(quota_data, Mapping):
+            remaining = quota_data.get("daily_remaining")
+            quota = FootballQuotaState(
+                daily_limit=quota_data.get("daily_limit") if isinstance(quota_data.get("daily_limit"), int) else None,
+                daily_remaining=remaining if isinstance(remaining, int) else None,
+                minute_limit=quota_data.get("minute_limit") if isinstance(quota_data.get("minute_limit"), int) else None,
+                minute_remaining=quota_data.get("minute_remaining") if isinstance(quota_data.get("minute_remaining"), int) else None,
+                low=isinstance(remaining, int) and remaining <= self._settings.low_quota_remaining,
+                critical=isinstance(remaining, int) and remaining <= self._settings.critical_quota_remaining,
+                observed_at=datetime.now(timezone.utc),
+            )
         return ProviderFootballSnapshot(
             tracked_team=tracked,
             next_match=match if match.status == MatchPhase.UPCOMING else None,
@@ -48,6 +61,7 @@ class FixtureFootballProvider:
             lineups=normalize_lineups(raw.get("lineups") if isinstance(raw, Mapping) else None, match, self._settings),
             statistics=normalize_statistics(raw.get("statistics") if isinstance(raw, Mapping) else None, match, self._settings),
             player_statistics=normalize_player_statistics(raw.get("players") if isinstance(raw, Mapping) else None, match, self._settings),
+            quota=quota,
             observed_at=datetime.now(timezone.utc),
         )
 

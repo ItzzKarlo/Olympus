@@ -1,5 +1,5 @@
 import type {
-  ActivityMode, ActivityTelemetry, ActiveAlert, CalendarEvent, CalendarState, CoreHostState, CurrentWeather, DailyWeather, DisplayEventMessage, FootballDisplayEvent, FootballLineupPlayer, FootballLineups, FootballMatch, FootballMatchEvent, FootballState, FootballStatistics, FootballTeam, FootballTeamLineup, FootballTeamStatistics, GameInfo, GameplayEvent, GamingState, GpuTelemetry,
+  ActivityMode, ActivityTelemetry, ActiveAlert, CalendarEvent, CalendarState, CoreHostState, CurrentWeather, DailyWeather, DisplayEventMessage, FootballDisplayEvent, FootballLineupPlayer, FootballLineups, FootballMatch, FootballMatchEvent, FootballPlayerStatistics, FootballQuotaState, FootballState, FootballStatistics, FootballTeam, FootballTeamLineup, FootballTeamStatistics, GameInfo, GameplayEvent, GamingState, GpuTelemetry,
   MachineState, MediaAlbum, MediaArtist, MediaContext, MediaQueueTrack,
   MediaState, MediaTrack, NetworkState, NetworkTelemetry, OlympusState,
   ProbeState, RecoveryNotice, ServiceState, StorageTelemetry, SystemTelemetry,
@@ -194,7 +194,8 @@ function isFootballMatch(value: unknown): value is FootballMatch {
 }
 
 function isFootballPlayer(value: unknown): boolean {
-  return isRecord(value) && isNullableString(value.id) && typeof value.name === "string";
+  return isRecord(value) && isNullableString(value.id) && typeof value.name === "string" &&
+    isOptionalNumber(value.number) && isNullableString(value.position);
 }
 
 function isFootballMatchEvent(value: unknown): value is FootballMatchEvent {
@@ -202,7 +203,8 @@ function isFootballMatchEvent(value: unknown): value is FootballMatchEvent {
     isOptionalNumber(value.minute) && isOptionalNumber(value.added_time) &&
     (value.team === null || isFootballTeam(value.team)) && (value.player === null || isFootballPlayer(value.player)) &&
     (value.assist === null || isFootballPlayer(value.assist)) && (value.score_after === null || isFootballScore(value.score_after)) &&
-    typeof value.for_tracked_team === "boolean" && isNullableString(value.detail);
+    typeof value.for_tracked_team === "boolean" && isNullableString(value.detail) &&
+    (value.location === null || (isRecord(value.location) && isOptionalNumber(value.location.x) && isOptionalNumber(value.location.y)));
 }
 
 function isFootballLineupPlayer(value: unknown): value is FootballLineupPlayer {
@@ -231,16 +233,59 @@ function isFootballStatistics(value: unknown): value is FootballStatistics {
     (value.away === null || isFootballTeamStatistics(value.away));
 }
 
+function hasOptionalNumbers(value: unknown, fields: string[]): value is Record<string, number | null> {
+  return isRecord(value) && fields.every((field) => isOptionalNumber(value[field]));
+}
+
+function isFootballPlayerStatistics(value: unknown): value is FootballPlayerStatistics {
+  return isRecord(value) && isFootballPlayer(value.player) && isFootballTeam(value.team) &&
+    typeof value.for_tracked_team === "boolean" && isOptionalNumber(value.minutes) &&
+    isOptionalNumber(value.rating) && (value.starter === null || typeof value.starter === "boolean") &&
+    isOptionalNumber(value.goals) && isOptionalNumber(value.assists) &&
+    hasOptionalNumbers(value.shots, ["total", "on_target"]) &&
+    hasOptionalNumbers(value.passes, ["total", "key", "accuracy_percent"]) &&
+    hasOptionalNumbers(value.defending, ["tackles", "interceptions", "blocks"]) &&
+    hasOptionalNumbers(value.duels, ["total", "won"]) &&
+    hasOptionalNumbers(value.dribbles, ["attempted", "successful"]) &&
+    hasOptionalNumbers(value.fouls, ["committed", "drawn"]) &&
+    hasOptionalNumbers(value.cards, ["yellow", "red"]) &&
+    hasOptionalNumbers(value.penalties, ["won", "committed", "scored", "missed", "saved"]);
+}
+
+function isFootballQuota(value: unknown): value is FootballQuotaState {
+  return isRecord(value) && ["daily_limit", "daily_remaining", "minute_limit", "minute_remaining"]
+    .every((field) => isOptionalNumber(value[field])) && typeof value.low === "boolean" &&
+    typeof value.critical === "boolean" && typeof value.observed_at === "string";
+}
+
 function isFootballState(value: unknown): value is FootballState {
   if (!isRecord(value) || typeof value.available !== "boolean" || typeof value.stale !== "boolean" ||
     typeof value.observed_at !== "string" || !isFootballTeam(value.tracked_team) ||
-    !(value.next_match === null || isFootballMatch(value.next_match))) return false;
+    !(value.next_match === null || isFootballMatch(value.next_match)) ||
+    !(value.quota === null || isFootballQuota(value.quota))) return false;
   if (value.matchday === null) return true;
   const context = value.matchday;
   return isRecord(context) && typeof context.active === "boolean" && MATCH_PHASES.includes(context.phase as string) &&
     isFootballTeam(context.tracked_team) && isFootballMatch(context.match) && Array.isArray(context.events) &&
     context.events.every(isFootballMatchEvent) && (context.lineups === null || isFootballLineups(context.lineups)) &&
-    (context.statistics === null || isFootballStatistics(context.statistics)) && typeof context.stale === "boolean" &&
+    (context.statistics === null || isFootballStatistics(context.statistics)) && Array.isArray(context.statistics_history) &&
+    context.statistics_history.every((item) => isRecord(item) && isOptionalNumber(item.minute) &&
+      (item.home === null || isFootballTeamStatistics(item.home)) && (item.away === null || isFootballTeamStatistics(item.away)) &&
+      typeof item.observed_at === "string") && Array.isArray(context.player_statistics) &&
+    context.player_statistics.every(isFootballPlayerStatistics) && Array.isArray(context.watched_players) &&
+    context.watched_players.every((item) => isRecord(item) && isFootballPlayer(item.player) &&
+      ["starting", "playing", "substituted", "bench", "unavailable", "finished"].includes(item.status as string) &&
+      isOptionalNumber(item.rating) && isOptionalNumber(item.previous_rating) && isOptionalNumber(item.rating_delta) &&
+      (item.statistics === null || isFootballPlayerStatistics(item.statistics))) &&
+    Array.isArray(context.top_tracked_players) && context.top_tracked_players.every(isFootballPlayerStatistics) &&
+    Array.isArray(context.top_opponent_players) && context.top_opponent_players.every(isFootballPlayerStatistics) &&
+    Array.isArray(context.rating_history) && context.rating_history.every((history) => isRecord(history) &&
+      isFootballPlayer(history.player) && Array.isArray(history.samples) && history.samples.every((sample) =>
+        isRecord(sample) && isOptionalNumber(sample.minute) && typeof sample.rating === "number" && typeof sample.observed_at === "string")) &&
+    Array.isArray(context.match_flow) && context.match_flow.every((point) => isRecord(point) &&
+      isOptionalNumber(point.minute) && typeof point.tracked_team === "number" && typeof point.opponent === "number" &&
+      ["statistics", "events", "combined"].includes(point.basis as string) && typeof point.observed_at === "string") &&
+    ["win", "draw", "loss", "unknown"].includes(context.result as string) && typeof context.stale === "boolean" &&
     typeof context.observed_at === "string";
 }
 

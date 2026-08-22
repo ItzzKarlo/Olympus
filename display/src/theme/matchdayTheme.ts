@@ -1,4 +1,4 @@
-import type { MatchPhase } from "../types/state";
+import type { FootballResult, MatchPhase } from "../types/state";
 import type { SceneTheme } from "./SceneTheme";
 
 function opponentHue(identity: string): number {
@@ -10,13 +10,15 @@ function opponentHue(identity: string): number {
   return 190 + (Math.abs(hash) % 46);
 }
 
-export function getMatchdayTheme(opponentIdentity: string, phase: MatchPhase, isNight: boolean): SceneTheme {
+export function getMatchdayTheme(opponentIdentity: string, phase: MatchPhase, isNight: boolean, result: FootballResult = "unknown"): SceneTheme {
   const hue = opponentHue(opponentIdentity);
   const live = phase === "live";
   const settled = phase === "half_time" || phase === "post_match" || phase === "finished";
+  const finalWin = settled && result === "win";
+  const finalLoss = settled && result === "loss";
   return {
-    background: isNight ? "#10070A" : "#17080C",
-    ambient: `radial-gradient(circle at 18% 18%, rgba(202, 28, 58, ${live ? ".24" : ".16"}), transparent 34%), radial-gradient(circle at 82% 74%, hsl(${hue} 42% 42% / .11), transparent 36%)`,
+    background: finalLoss ? "#0E0B0D" : isNight ? "#10070A" : "#17080C",
+    ambient: `radial-gradient(circle at 18% 18%, rgba(202, 28, 58, ${finalWin ? ".3" : finalLoss ? ".08" : live ? ".24" : ".16"}), transparent 34%), radial-gradient(circle at 82% 74%, hsl(${hue} 42% 42% / ${finalLoss ? ".05" : ".11"}), transparent 36%)`,
     surface: "#211015",
     surfaceAlt: "#2B141B",
     panel: "rgba(28, 12, 17, .84)",
@@ -33,9 +35,9 @@ export function getMatchdayTheme(opponentIdentity: string, phase: MatchPhase, is
     grid: "rgba(235, 216, 222, .025)",
     particles: {
       colors: ["#D51F3D", "#F0E8EB", "#8E2034", "#6F7888", "#B48F98"],
-      density: settled ? 0.52 : live ? 0.88 : 0.68,
+      density: finalWin ? 0.76 : finalLoss ? 0.34 : settled ? 0.52 : live ? 0.88 : 0.68,
       shape: "confetti",
-      speed: settled ? 0.48 : live ? 0.82 : 0.64,
+      speed: finalWin ? 0.62 : finalLoss ? 0.34 : settled ? 0.48 : live ? 0.82 : 0.64,
     },
   };
 }
