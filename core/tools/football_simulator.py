@@ -9,9 +9,10 @@ import time
 
 PHASES = (
     "upcoming", "pre_match", "live", "ratings", "goal", "stats_30", "half_time",
-    "second_half", "substitution", "opponent_goal", "red", "bayern_goal",
+    "watched_goal", "yellow", "substitution", "opponent_goal", "red", "final_goal",
     "full_time", "loss", "missing_players", "low_quota", "outage",
 )
+ALIASES = {"second_half": "watched_goal", "bayern_goal": "final_goal"}
 
 BAYERN = [
     (8, "Manuel Neuer", 1, "G"), (9, "Konrad Laimer", 27, "D"),
@@ -89,19 +90,21 @@ def player_blocks(minute: int, score: tuple[int | None, int | None], phase: str)
     if phase == "missing_players":
         return [{"team": {"id": 165, "name": "Borussia Dortmund"}, "players": []}]
     first_goal = score[0] is not None and score[0] >= 1
-    second_goal = phase in {"bayern_goal", "full_time"}
+    second_goal = score[0] is not None and score[0] >= 2
+    final_goal = score[0] is not None and score[0] >= 3
     opponent_goal = score[1] is not None and score[1] >= 1
     kane_rating = 7.0 if phase == "live" else 7.3 if phase == "ratings" else 8.1 if first_goal else 7.1
     return [
         {"team": {"id": 157, "name": "Bayern Munich"}, "players": [
-            player_stat(1, "Harry Kane", 9, "F", kane_rating, minute, goals=1 if first_goal else 0,
+            player_stat(1, "Harry Kane", 9, "F", 8.7 if final_goal else kane_rating, minute, goals=1 if first_goal else 0,
                         shots=4 if first_goal else 2, on_target=2 if first_goal else 1, duels=6, duels_won=4),
             player_stat(2, "Jamal Musiala", 10, "M", 8.7 if second_goal else 7.1, minute,
-                        goals=1 if second_goal else 0, assists=1 if first_goal else 0,
+                        goals=1 if second_goal else 0, assists=2 if final_goal else 1 if first_goal else 0,
                         shots=3, on_target=2, key_passes=3, duels=9, duels_won=6),
             player_stat(3, "Joshua Kimmich", 6, "M", 7.4 if minute >= 45 else 7.0, minute,
                         assists=1 if second_goal else 0, key_passes=4, duels=7, duels_won=5),
-            player_stat(4, "Michael Olise", 17, "M", 7.5, minute, shots=2, on_target=1, key_passes=2),
+            player_stat(4, "Michael Olise", 17, "M", 8.3 if final_goal else 7.5, minute,
+                        goals=1 if final_goal else 0, shots=2, on_target=1, key_passes=2),
         ]},
         {"team": {"id": 165, "name": "Borussia Dortmund"}, "players": [
             player_stat(111, "Serhou Guirassy", 9, "F", 7.8 if opponent_goal else 6.8, minute,
@@ -113,55 +116,67 @@ def player_blocks(minute: int, score: tuple[int | None, int | None], phase: str)
 
 
 def phase_state(phase: str, now: datetime) -> tuple[datetime, str, int | None, tuple[int | None, int | None], list[dict[str, object]]]:
+    phase = ALIASES.get(phase, phase)
     kickoff, status, minute, score = now + timedelta(days=1), "NS", None, (None, None)
     events: list[dict[str, object]] = []
-    if phase in {"pre_match", "missing_players"}:
+    if phase == "pre_match":
         kickoff = now + timedelta(minutes=30)
-    if phase not in {"upcoming", "pre_match", "missing_players", "outage"}:
-        minutes = {"live": 12, "ratings": 16, "goal": 23, "stats_30": 30, "half_time": 45,
-                   "second_half": 52, "substitution": 61, "opponent_goal": 68, "red": 74,
-                   "bayern_goal": 83, "full_time": 90, "loss": 90, "low_quota": 76}
+    if phase not in {"upcoming", "pre_match", "outage"}:
+        minutes = {"live": 1, "ratings": 15, "goal": 17, "stats_30": 30, "half_time": 45,
+                   "watched_goal": 52, "yellow": 58, "substitution": 67, "opponent_goal": 72,
+                   "red": 80, "final_goal": 90, "full_time": 90, "loss": 90,
+                   "missing_players": 35, "low_quota": 76}
         minute = minutes[phase]
         kickoff = now - timedelta(minutes=minute)
         status = "HT" if phase == "half_time" else "FT" if phase in {"full_time", "loss"} else "1H" if minute < 45 else "2H"
         score = (0, 0)
-        if phase in {"goal", "stats_30", "half_time", "second_half", "substitution", "opponent_goal", "red", "bayern_goal", "full_time", "low_quota"}:
-            events.append(event(23, 157, 1, "Harry Kane", "Goal", "Normal Goal", 2, "Jamal Musiala"))
+        if phase in {"goal", "stats_30", "half_time", "watched_goal", "yellow", "substitution", "opponent_goal", "red", "final_goal", "full_time", "low_quota"}:
+            events.append(event(17, 157, 1, "Harry Kane", "Goal", "Normal Goal", 2, "Jamal Musiala"))
             score = (1, 0)
-        if phase in {"substitution", "opponent_goal", "red", "bayern_goal", "full_time", "low_quota"}:
-            events.append(event(61, 157, 1, "Harry Kane", "subst", "Substitution 1", 15, "Thomas Müller"))
-        if phase in {"opponent_goal", "red", "bayern_goal", "full_time", "low_quota"}:
-            events.append(event(68, 165, 111, "Serhou Guirassy", "Goal", "Normal Goal", 110, "Julian Brandt"))
-            score = (1, 1)
-        if phase in {"red", "bayern_goal", "full_time", "low_quota"}:
-            events.append(event(74, 165, 103, "Nico Schlotterbeck", "Card", "Red Card"))
-        if phase in {"bayern_goal", "full_time"}:
-            events.append(event(83, 157, 2, "Jamal Musiala", "Goal", "Normal Goal", 3, "Joshua Kimmich"))
+        if phase in {"watched_goal", "yellow", "substitution", "opponent_goal", "red", "final_goal", "full_time", "low_quota"}:
+            events.append(event(52, 157, 2, "Jamal Musiala", "Goal", "Normal Goal", 3, "Joshua Kimmich"))
+            score = (2, 0)
+        if phase in {"yellow", "substitution", "opponent_goal", "red", "final_goal", "full_time", "low_quota"}:
+            events.append(event(58, 165, 102, "Waldemar Anton", "Card", "Yellow Card"))
+        if phase in {"substitution", "opponent_goal", "red", "final_goal", "full_time", "low_quota"}:
+            events.append(event(67, 157, 1, "Harry Kane", "subst", "Substitution 1", 15, "Thomas Müller"))
+        if phase in {"opponent_goal", "red", "final_goal", "full_time", "low_quota"}:
+            events.append(event(72, 165, 111, "Serhou Guirassy", "Goal", "Normal Goal", 110, "Julian Brandt"))
             score = (2, 1)
+        if phase in {"red", "final_goal", "full_time", "low_quota"}:
+            events.append(event(80, 165, 103, "Nico Schlotterbeck", "Card", "Red Card"))
+        if phase in {"final_goal", "full_time"}:
+            events.append(event(90, 157, 4, "Michael Olise", "Goal", "Normal Goal", 2, "Jamal Musiala"))
+            score = (3, 1)
         if phase == "loss":
             events = [event(37, 165, 111, "Serhou Guirassy", "Goal", "Normal Goal")]
             score = (0, 1)
+        if phase == "missing_players":
+            events = [event(17, 157, 1, "Harry Kane", "Goal", "Normal Goal", 2, "Jamal Musiala")]
+            score = (1, 0)
     return kickoff, status, minute, score, events
 
 
 def payload(phase: str, now: datetime) -> dict[str, object]:
     if phase == "outage":
         return {"response": []}
-    kickoff, status, minute, score, events = phase_state(phase, now)
+    normalized_phase = ALIASES.get(phase, phase)
+    kickoff, status, minute, score, events = phase_state(normalized_phase, now)
     live_data = status != "NS"
     home_stats = (61, 14, 7, 6, 520, 89, 8) if (minute or 0) >= 75 else (58, 8, 4, 4, 286, 87, 5)
     away_stats = (39, 7, 3, 3, 314, 84, 11) if (minute or 0) >= 75 else (42, 4, 1, 2, 205, 83, 7)
     fixture = {
-        "fixture": {"id": 99009, "date": kickoff.isoformat(), "venue": {"name": "Allianz Arena"},
+        "fixture": {"id": 99010 if phase == "missing_players" else 99011 if phase == "low_quota" else 99009,
+                    "date": kickoff.isoformat(), "venue": {"name": "Allianz Arena"},
                     "status": {"short": status, "elapsed": minute, "extra": None}},
         "league": {"id": 78, "name": "Bundesliga"},
         "teams": {"home": {"id": 157, "name": "Bayern Munich", "code": "BAY"},
                   "away": {"id": 165, "name": "Borussia Dortmund", "code": "BVB"}},
         "goals": {"home": score[0], "away": score[1]}, "events": events,
-        "lineups": [] if phase in {"upcoming", "missing_players"} else [
+        "lineups": [] if phase == "upcoming" else [
             lineup(157, BAYERN, "4-2-3-1"), lineup(165, DORTMUND, "3-4-2-1")],
         "statistics": [team_statistics(157, *home_stats), team_statistics(165, *away_stats)] if live_data else [],
-        "players": player_blocks(minute or 0, score, phase) if live_data else [],
+        "players": player_blocks(minute or 0, score, normalized_phase) if live_data and normalized_phase != "live" else [],
     }
     result: dict[str, object] = {"response": [fixture]}
     if phase == "low_quota":
@@ -178,7 +193,7 @@ def write_fixture(path: Path, phase: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=(*PHASES, "sequence"))
+    parser.add_argument("phase", choices=(*PHASES, *ALIASES, "sequence"))
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--delay", type=float, default=16.0, help="Seconds between sequence phases")
     args = parser.parse_args()
