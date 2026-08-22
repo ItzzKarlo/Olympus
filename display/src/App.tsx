@@ -3,13 +3,17 @@ import { ConnectionStatus } from "./components/ConnectionStatus";
 import { ParticleField } from "./components/ParticleField";
 import { useClock } from "./hooks/useClock";
 import { useOlympusState } from "./hooks/useOlympusState";
+import { useSceneTheme } from "./hooks/useSceneTheme";
 import { DevelopmentMode } from "./modes/Development/DevelopmentMode";
 import { IdleMode } from "./modes/Idle/IdleMode";
+import { MediaMode } from "./modes/Media/MediaMode";
+import { sceneStyle } from "./theme/SceneTheme";
+import { idleTheme } from "./theme/themes";
 
 function StartupScreen() {
   return (
     <main className="startup-screen">
-      <ParticleField />
+      <ParticleField colors={idleTheme.particles} />
       <Brand />
       <div className="startup-screen__message">
         <span className="startup-screen__orbit" aria-hidden="true" />
@@ -25,23 +29,25 @@ function StartupScreen() {
 export default function App() {
   const { connectionStatus, state } = useOlympusState();
   const now = useClock();
+  const theme = useSceneTheme(connectionStatus === "connected" ? state : null);
 
   if (state === null) return <StartupScreen />;
 
-  const scene =
-    state.mode === "development" ? (
+  const scene = state.mode === "development" ? (
       <DevelopmentMode
         connectionStatus={connectionStatus}
         now={now}
         state={state}
       />
+    ) : state.mode === "media" && state.media?.track ? (
+      <MediaMode connectionStatus={connectionStatus} media={state.media} />
     ) : (
       <IdleMode connectionStatus={connectionStatus} now={now} state={state} />
     );
 
   return (
-    <main className={`olympus-display mode-${state.mode}`}>
-      <ParticleField />
+    <main className={`olympus-display mode-${state.mode}`} style={sceneStyle(theme)}>
+      <ParticleField colors={theme.particles} />
       <div key={state.mode} className="scene-transition">
         {scene}
       </div>

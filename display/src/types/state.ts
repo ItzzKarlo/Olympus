@@ -29,12 +29,57 @@ export interface MachineState {
   activity: ActivityTelemetry | null;
 }
 
+export interface MediaArtist {
+  id: string | null;
+  name: string;
+}
+
+export interface MediaAlbum {
+  id: string | null;
+  name: string;
+  artwork_url: string | null;
+}
+
+export interface MediaTrack {
+  id: string | null;
+  title: string;
+  artists: MediaArtist[];
+  duration_ms: number;
+  album: MediaAlbum | null;
+}
+
+export interface MediaContext {
+  type: string;
+  name: string | null;
+  uri: string | null;
+}
+
+export interface MediaQueueTrack {
+  id: string | null;
+  title: string;
+  artists: string[];
+  duration_ms: number;
+  artwork_url: string | null;
+}
+
+export interface MediaState {
+  provider: "spotify";
+  available: boolean;
+  is_playing: boolean;
+  observed_at: string;
+  progress_ms: number;
+  track: MediaTrack | null;
+  context: MediaContext | null;
+  queue: MediaQueueTrack[];
+}
+
 export interface OlympusState {
   type: "state";
   mode: ActivityMode;
   active_device: string | null;
   generated_at: string;
   machines: Record<string, MachineState>;
+  media: MediaState | null;
 }
 
 export type ConnectionStatus = "connecting" | "connected" | "reconnecting";

@@ -2,6 +2,12 @@ import type {
   ActivityMode,
   ActivityTelemetry,
   MachineState,
+  MediaAlbum,
+  MediaArtist,
+  MediaContext,
+  MediaQueueTrack,
+  MediaState,
+  MediaTrack,
   OlympusState,
   SystemTelemetry,
 } from "../types/state";
@@ -59,6 +65,76 @@ function isMachineState(value: unknown): value is MachineState {
   );
 }
 
+function isNullableString(value: unknown): value is string | null {
+  return typeof value === "string" || value === null;
+}
+
+function isMediaArtist(value: unknown): value is MediaArtist {
+  return (
+    isRecord(value) &&
+    isNullableString(value.id) &&
+    typeof value.name === "string"
+  );
+}
+
+function isMediaAlbum(value: unknown): value is MediaAlbum {
+  return (
+    isRecord(value) &&
+    isNullableString(value.id) &&
+    typeof value.name === "string" &&
+    isNullableString(value.artwork_url)
+  );
+}
+
+function isMediaTrack(value: unknown): value is MediaTrack {
+  return (
+    isRecord(value) &&
+    isNullableString(value.id) &&
+    typeof value.title === "string" &&
+    Array.isArray(value.artists) &&
+    value.artists.every(isMediaArtist) &&
+    typeof value.duration_ms === "number" &&
+    (value.album === null || isMediaAlbum(value.album))
+  );
+}
+
+function isMediaContext(value: unknown): value is MediaContext {
+  return (
+    isRecord(value) &&
+    typeof value.type === "string" &&
+    isNullableString(value.name) &&
+    isNullableString(value.uri)
+  );
+}
+
+function isMediaQueueTrack(value: unknown): value is MediaQueueTrack {
+  return (
+    isRecord(value) &&
+    isNullableString(value.id) &&
+    typeof value.title === "string" &&
+    Array.isArray(value.artists) &&
+    value.artists.every((artist) => typeof artist === "string") &&
+    typeof value.duration_ms === "number" &&
+    isNullableString(value.artwork_url)
+  );
+}
+
+function isMediaState(value: unknown): value is MediaState {
+  return (
+    isRecord(value) &&
+    value.provider === "spotify" &&
+    typeof value.available === "boolean" &&
+    typeof value.is_playing === "boolean" &&
+    typeof value.observed_at === "string" &&
+    typeof value.progress_ms === "number" &&
+    (value.track === null || isMediaTrack(value.track)) &&
+    (value.context === null || isMediaContext(value.context)) &&
+    Array.isArray(value.queue) &&
+    value.queue.length <= 3 &&
+    value.queue.every(isMediaQueueTrack)
+  );
+}
+
 export function parseStateMessage(rawMessage: string): OlympusState | null {
   let value: unknown;
   try {
@@ -73,11 +149,19 @@ export function parseStateMessage(rawMessage: string): OlympusState | null {
     !isActivityMode(value.mode) ||
     !(typeof value.active_device === "string" || value.active_device === null) ||
     typeof value.generated_at !== "string" ||
-    !isRecord(value.machines)
+    !isRecord(value.machines) ||
+    !(
+      value.media === undefined ||
+      value.media === null ||
+      isMediaState(value.media)
+    )
   ) {
     return null;
   }
 
   if (!Object.values(value.machines).every(isMachineState)) return null;
-  return value as unknown as OlympusState;
+  return {
+    ...(value as unknown as OlympusState),
+    media: (value.media as MediaState | null | undefined) ?? null,
+  };
 }

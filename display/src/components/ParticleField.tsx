@@ -4,7 +4,8 @@ type ConfettiShape = "circle" | "dash" | "square" | "triangle";
 
 interface Particle {
   collisionRadius: number;
-  color: string;
+  color: Rgb;
+  colorIndex: number;
   height: number;
   phase: number;
   rotation: number;
@@ -17,12 +18,36 @@ interface Particle {
   y: number;
 }
 
-const COLORS = ["#5B6FD8", "#3F8F67", "#C88A32", "#C65C5C", "#4E89B8"];
+interface Rgb {
+  r: number;
+  g: number;
+  b: number;
+}
+
+const DEFAULT_COLORS = ["#5B6FD8", "#3F8F67", "#C88A32", "#C65C5C", "#4E89B8"];
 const SHAPES: ConfettiShape[] = ["dash", "square", "triangle", "circle"];
 const MAX_SPEED = 0.24;
 
-export function ParticleField() {
+function parseColor(color: string): Rgb {
+  const normalized = color.replace("#", "");
+  if (/^[0-9a-f]{6}$/i.test(normalized)) {
+    return {
+      r: Number.parseInt(normalized.slice(0, 2), 16),
+      g: Number.parseInt(normalized.slice(2, 4), 16),
+      b: Number.parseInt(normalized.slice(4, 6), 16),
+    };
+  }
+  return { r: 91, g: 111, b: 216 };
+}
+
+interface ParticleFieldProps {
+  colors?: string[];
+}
+
+export function ParticleField({ colors = DEFAULT_COLORS }: ParticleFieldProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const paletteRef = useRef<Rgb[]>(colors.map(parseColor));
+  paletteRef.current = (colors.length > 0 ? colors : DEFAULT_COLORS).map(parseColor);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -68,9 +93,11 @@ export function ParticleField() {
 
         const direction = Math.random() * Math.PI * 2;
         const speed = 0.07 + Math.random() * 0.11;
+        const colorIndex = index % paletteRef.current.length;
         nextParticles.push({
           collisionRadius,
-          color: COLORS[index % COLORS.length],
+          color: { ...paletteRef.current[colorIndex] },
+          colorIndex,
           height: particleHeight,
           phase: Math.random() * Math.PI * 2,
           rotation: Math.random() * Math.PI,
@@ -100,10 +127,14 @@ export function ParticleField() {
     };
 
     const drawParticle = (particle: Particle) => {
+      const target = paletteRef.current[particle.colorIndex % paletteRef.current.length];
+      particle.color.r += (target.r - particle.color.r) * 0.025;
+      particle.color.g += (target.g - particle.color.g) * 0.025;
+      particle.color.b += (target.b - particle.color.b) * 0.025;
       context.save();
       context.translate(particle.x, particle.y);
       context.rotate(particle.rotation);
-      context.fillStyle = particle.color;
+      context.fillStyle = `rgb(${Math.round(particle.color.r)}, ${Math.round(particle.color.g)}, ${Math.round(particle.color.b)})`;
       context.globalAlpha = particle.shape === "circle" ? 0.38 : 0.5;
 
       if (particle.shape === "circle") {
