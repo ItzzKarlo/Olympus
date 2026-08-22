@@ -2,35 +2,31 @@ from datetime import datetime, timezone
 
 from olympus_core.agents.registry import AgentRegistry
 from olympus_core.models.state import DisplayState, MachineState, OlympusState
-from olympus_core.models.telemetry import ActivityMode
+from olympus_core.services.media import MediaStateStore
+from olympus_core.services.mode_resolver import ModeResolver
 
 
 class StateService:
     """Interprets agent observations into the state consumed by Olympus outputs."""
 
-    def __init__(self, registry: AgentRegistry) -> None:
+    def __init__(
+        self,
+        registry: AgentRegistry,
+        media: MediaStateStore | None = None,
+        resolver: ModeResolver | None = None,
+    ) -> None:
         self._registry = registry
+        self._media = media or MediaStateStore()
+        self._resolver = resolver or ModeResolver()
 
     def current(self) -> OlympusState:
         agents = self._registry.get_all()
-        active_device = next(
-            (
-                agent.agent_id
-                for agent in agents
-                if agent.online
-                and agent.activity is not None
-                and agent.activity.mode == ActivityMode.DEVELOPMENT
-            ),
-            None,
-        )
+        media = self._media.get()
+        resolution = self._resolver.resolve(agents, media)
 
         return OlympusState(
-            mode=(
-                ActivityMode.DEVELOPMENT
-                if active_device is not None
-                else ActivityMode.IDLE
-            ),
-            active_device=active_device,
+            mode=resolution.mode,
+            active_device=resolution.active_device,
             machines={
                 agent.agent_id: MachineState(
                     agent_id=agent.agent_id,
@@ -44,6 +40,7 @@ class StateService:
                 )
                 for agent in agents
             },
+            media=media,
         )
 
     def display_state(self) -> DisplayState:

@@ -3,6 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from olympus_core.models.media import MediaState
 from olympus_core.models.telemetry import ActivityMode, ActivityTelemetry, SystemTelemetry
 
 
@@ -21,6 +22,7 @@ class OlympusState(BaseModel):
     mode: ActivityMode
     active_device: str | None
     machines: dict[str, MachineState]
+    media: MediaState | None = None
 
 
 class DisplayState(OlympusState):

@@ -56,6 +56,7 @@ class StateServiceTests(unittest.TestCase):
         self.assertEqual(state.mode, ActivityMode.DEVELOPMENT)
         self.assertEqual(state.active_device, "mac-test")
         self.assertIn("mac-test", state.machines)
+        self.assertIsNone(state.media)
         self.assertIsNotNone(state.generated_at.tzinfo)
 
     def test_disconnected_agent_changes_display_state_to_idle(self) -> None:
