@@ -17,7 +17,7 @@ class StateServiceTests(unittest.TestCase):
         self.assertEqual(state.mode, ActivityMode.IDLE)
         self.assertIsNone(state.active_device)
         self.assertEqual(state.machines, {})
-        self.assertEqual(state.timezone, "UTC")
+        self.assertEqual(state.timezone, "Europe/Berlin")
         self.assertIsNone(state.weather)
         self.assertIsNone(state.calendar)
 

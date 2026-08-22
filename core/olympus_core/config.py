@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 logger = logging.getLogger(__name__)
+DEFAULT_TIMEZONE = "Europe/Berlin"
 
 
 def _enabled(value: str | None) -> bool:
@@ -56,7 +57,7 @@ class WeatherSettings:
     enabled: bool = False
     latitude: float | None = None
     longitude: float | None = None
-    timezone: str = "UTC"
+    timezone: str = DEFAULT_TIMEZONE
     location_name: str | None = None
     poll_seconds: float = 600.0
     stale_seconds: float = 1_800.0
@@ -71,7 +72,7 @@ class WeatherSettings:
 class CalendarSettings:
     enabled: bool = False
     provider: str = "google"
-    timezone: str = "UTC"
+    timezone: str = DEFAULT_TIMEZONE
     lookahead_days: int = 7
     poll_seconds: float = 300.0
     stale_seconds: float = 1_800.0
@@ -114,7 +115,7 @@ class FootballSettings:
     team_name: str = "FC Bayern München"
     team_short_name: str = "Bayern"
     team_code: str = "FCB"
-    timezone: str = "UTC"
+    timezone: str = DEFAULT_TIMEZONE
     api_key: str | None = None
     fixture_path: str | None = None
     matchday: FootballMatchdaySettings = FootballMatchdaySettings()
@@ -140,7 +141,7 @@ class FootballSettings:
 
 @dataclass(frozen=True, slots=True)
 class CoreSettings:
-    timezone: str = "UTC"
+    timezone: str = DEFAULT_TIMEZONE
     weather: WeatherSettings = WeatherSettings()
     calendar: CalendarSettings = CalendarSettings()
     night: NightSettings = NightSettings()
@@ -151,7 +152,7 @@ def _mapping(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _timezone(value: Any, fallback: str = "UTC") -> str:
+def _timezone(value: Any, fallback: str = DEFAULT_TIMEZONE) -> str:
     candidate = value.strip() if isinstance(value, str) and value.strip() else fallback
     try:
         ZoneInfo(candidate)

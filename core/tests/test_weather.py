@@ -65,7 +65,7 @@ class WeatherNormalizationTests(unittest.TestCase):
     def test_disabled_and_unconfigured_weather_remains_optional(self) -> None:
         config = parse_core_config({"weather": {"enabled": True, "latitude": "bad"}})
         self.assertFalse(config.weather.configured)
-        self.assertEqual(parse_core_config({}).timezone, "UTC")
+        self.assertEqual(parse_core_config({}).timezone, "Europe/Berlin")
 
     def test_configures_coordinates_polling_and_timezone(self) -> None:
         config = parse_core_config({

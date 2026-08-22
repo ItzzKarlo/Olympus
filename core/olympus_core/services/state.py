@@ -25,7 +25,7 @@ class StateService:
         monitoring: MonitoringStore | None = None,
         events: EventService | None = None,
         gaming: GamingSessionService | None = None,
-        timezone: str = "UTC",
+        timezone: str = "Europe/Berlin",
         weather: WeatherStateStore | None = None,
         calendar: CalendarStateStore | None = None,
         time_policy: TimePolicyService | None = None,

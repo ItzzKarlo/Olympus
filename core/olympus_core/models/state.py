@@ -64,7 +64,7 @@ class OlympusState(BaseModel):
     mode: ActivityMode
     active_device: str | None
     machines: dict[str, MachineState]
-    timezone: str = "UTC"
+    timezone: str = "Europe/Berlin"
     weather: WeatherState | None = None
     calendar: CalendarState | None = None
     time_policy: TimePolicyState

@@ -159,16 +159,13 @@ select {
 }
 
 .brand__mark {
-  display: grid;
   width: 2.65rem;
   height: 2.65rem;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  color: var(--idle);
-  background: var(--panel);
-  font-family: "SFMono-Regular", Consolas, monospace;
-  font-size: 1rem;
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: .72rem;
+  object-fit: cover;
+  box-shadow: 0 .35rem 1.2rem rgba(23, 24, 22, .09);
 }
 
 .brand div {

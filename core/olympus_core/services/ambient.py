@@ -65,7 +65,7 @@ def interpret_calendar(snapshot: CalendarSnapshot, timezone_name: str, now: date
 
 
 class CalendarStateStore:
-    def __init__(self, timezone_name: str = "UTC") -> None:
+    def __init__(self, timezone_name: str = "Europe/Berlin") -> None:
         self._timezone = timezone_name
         self._snapshot: CalendarSnapshot | None = None
 

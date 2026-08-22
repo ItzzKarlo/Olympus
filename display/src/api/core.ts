@@ -373,7 +373,7 @@ export function parseStateMessage(rawMessage: string): OlympusState | null {
     machines: Object.fromEntries(Object.entries(value.machines).map(([id, machine]) =>
       [id, normalizeMachine(machine as unknown as MachineState)])),
     media: (value.media as MediaState | null | undefined) ?? null,
-    timezone: (value.timezone as string | undefined) ?? "UTC",
+    timezone: (value.timezone as string | undefined) ?? "Europe/Berlin",
     weather: (value.weather as WeatherState | null | undefined) ?? null,
     calendar: (value.calendar as CalendarState | null | undefined) ?? null,
     football: (value.football as FootballState | null | undefined) ?? null,
