@@ -60,6 +60,10 @@ build/
 .vite/
 *.tsbuildinfo
 
+.env
+.env.local
+.env.*.local
+
 
 # ––––––––––––––––––––––––––––––––––––
 # Olympus Runtime Data

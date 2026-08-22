@@ -78,14 +78,14 @@ Agents send this information to the Olympus Core.
 ## Initial architecture
 
 ```text
-macOS Agent ──persistent WebSocket──> Olympus Core ──HTTP state──> Display
-    │                                      │
-    └─ observes CPU, RAM, and IDEs          └─ interprets global mode
+macOS Agent ──/ws/agents──> Olympus Core ──/ws/display──> Display
+    │                              │                          │
+    └─ observes CPU, RAM, and IDEs  └─ interprets global mode └─ renders state
 ```
 
-The first vertical slice is implemented for macOS. The agent owns device-specific
-observation, Core owns mode selection, and the future Display will consume only
-Core's interpreted state.
+Olympus v0.2 implements this full local path. The agent owns device-specific
+observation, Core owns mode selection, and the Display consumes only Core's
+interpreted state.
 
 ## Run Olympus Core
 
@@ -109,6 +109,7 @@ Core exposes:
 - `GET /api/agents` — registered devices and their latest telemetry
 - `GET /api/state` — interpreted Olympus mode and machine state
 - `WS /ws/agents` — persistent agent connection
+- `WS /ws/display` — live interpreted state for displays
 
 State is intentionally held in memory for this milestone.
 
@@ -140,6 +141,27 @@ Optional settings:
 - `OLYMPUS_RECONNECT_DELAY` — retry delay in seconds (default `3`)
 - `OLYMPUS_AGENT_ID_PATH` — identity file override for development/testing
 
+## Run the Display
+
+```bash
+cd display
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`. The Display connects to
+`ws://127.0.0.1:8000/ws/display` by default and automatically reconnects if Core
+is unavailable or restarts.
+
+When the Display is not running on Hermes itself, configure the Core endpoint:
+
+```bash
+VITE_OLYMPUS_CORE_WS=ws://10.10.0.10:8000/ws/display npm run dev
+```
+
+For v0.2, the Display is a browser-based development UI. It is not yet packaged
+or deployed as a kiosk.
+
 ## Test
 
 ```bash
@@ -148,7 +170,11 @@ python -m unittest discover -s tests
 
 cd ../agents/macos
 python -m unittest discover -s tests
+
+cd ../../display
+npm run build
 ```
 
-The current milestone does not include a database, authentication, Docker, or the
-Display. Windows and Linux agents remain future work.
+The current milestone does not include a database, authentication, Docker, kiosk
+packaging, or future scenes and integrations. Windows and Linux agents remain
+future work.
