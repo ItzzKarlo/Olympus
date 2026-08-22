@@ -83,9 +83,9 @@ macOS Agent ──/ws/agents──> Olympus Core ──/ws/display──> Displa
     └─ observes CPU, RAM, and IDEs  └─ interprets global mode └─ renders state
 ```
 
-Olympus v0.2 implements this full local path. The agent owns device-specific
-observation, Core owns mode selection, and the Display consumes only Core's
-interpreted state.
+Olympus v0.3 implements this full local path. The agent owns device-specific
+observation, Core owns mode selection and media collection, and the Display
+consumes only Core's interpreted state.
 
 ## Run Olympus Core
 
@@ -112,6 +112,70 @@ Core exposes:
 - `WS /ws/display` — live interpreted state for displays
 
 State is intentionally held in memory for this milestone.
+
+## Optional Spotify integration
+
+Spotify is entirely optional. Without Spotify credentials, Olympus starts and
+runs normally with Idle and Development scenes.
+
+When configured, Core polls the current playback and queue, normalizes that data,
+and publishes it to the Display. Scene priority is:
+
+```text
+Spotify playing → MEDIA
+IDE active      → DEVELOPMENT overrides MEDIA
+IDE closes      → MEDIA resumes
+Spotify pauses  → IDLE
+```
+
+Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard),
+add `http://127.0.0.1:8787/callback` as a redirect URI, and copy the example
+configuration:
+
+```bash
+cd core
+cp .env.example .env
+```
+
+Set the client ID and client secret in `core/.env`, export those two variables in
+your shell, then run the local authorization helper once:
+
+```bash
+export OLYMPUS_SPOTIFY_CLIENT_ID=your_client_id
+export OLYMPUS_SPOTIFY_CLIENT_SECRET=your_client_secret
+.venv/bin/python tools/spotify_auth.py
+```
+
+The helper requests only `user-read-currently-playing` and
+`user-read-playback-state`. Put the returned refresh token in `core/.env`, then
+enable the collector:
+
+```dotenv
+OLYMPUS_SPOTIFY_ENABLED=true
+OLYMPUS_SPOTIFY_CLIENT_ID=your_client_id
+OLYMPUS_SPOTIFY_CLIENT_SECRET=your_client_secret
+OLYMPUS_SPOTIFY_REFRESH_TOKEN=your_refresh_token
+OLYMPUS_SPOTIFY_POLL_SECONDS=5
+```
+
+Start Core with the environment file:
+
+```bash
+uvicorn olympus_core.main:app --reload --env-file .env
+```
+
+The available settings are:
+
+- `OLYMPUS_SPOTIFY_ENABLED` — opt in to Spotify collection (default `false`)
+- `OLYMPUS_SPOTIFY_CLIENT_ID` — Spotify application client ID
+- `OLYMPUS_SPOTIFY_CLIENT_SECRET` — Spotify application client secret
+- `OLYMPUS_SPOTIFY_REFRESH_TOKEN` — user authorization refresh token
+- `OLYMPUS_SPOTIFY_POLL_SECONDS` — polling interval in seconds (default `5`)
+
+Credentials and tokens remain in the ignored `core/.env` file. If Spotify is
+temporarily unreachable, Core keeps the last good playback state briefly and
+continues serving agents and displays normally. If Spotify later reports an
+expired or revoked refresh token, rerun the authorization helper.
 
 ## Run the macOS agent
 
@@ -159,7 +223,7 @@ When the Display is not running on Hermes itself, configure the Core endpoint:
 VITE_OLYMPUS_CORE_WS=ws://10.10.0.10:8000/ws/display npm run dev
 ```
 
-For v0.2, the Display is a browser-based development UI. It is not yet packaged
+For v0.3, the Display is a browser-based development UI. It is not yet packaged
 or deployed as a kiosk.
 
 ## Test
@@ -175,6 +239,6 @@ cd ../../display
 npm run build
 ```
 
-The current milestone does not include a database, authentication, Docker, kiosk
-packaging, or future scenes and integrations. Windows and Linux agents remain
-future work.
+The current milestone does not include a database, Olympus authentication,
+Docker, kiosk packaging, or future scenes and integrations. Windows and Linux
+agents remain future work.
