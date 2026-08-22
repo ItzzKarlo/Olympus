@@ -47,6 +47,10 @@ def load_or_create_device_key(path: Path) -> DeviceKey:
         private_key = serialization.load_pem_private_key(path.read_bytes(), password=None)
         if not isinstance(private_key, Ed25519PrivateKey):
             raise ValueError("Agent key is not an Ed25519 private key")
+        try:
+            path.chmod(0o600)
+        except OSError:
+            pass
         return DeviceKey(private_key)
     except FileNotFoundError:
         pass

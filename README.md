@@ -96,7 +96,7 @@ machine Agent:
 Minecraft + Fabric observer → localhost Agent → Core → Display
 ```
 
-Olympus v0.11 implements this full local path. Agents own device-specific
+Olympus v0.12 implements this full local path. Agents own device-specific
 observation, Core owns interpretation and monitoring, and the Display consumes
 only Core's normalized state.
 
@@ -139,9 +139,107 @@ Core exposes:
 - `WS /ws/agents` — persistent agent connection
 - `WS /ws/display` — live interpreted state for displays
 
-State is intentionally held in memory for this milestone. Hermes is the intended
-long-term Core host, but running Core on a local development machine remains fully
-supported; `core_host` describes whichever machine currently runs Core.
+High-frequency observations remain intentionally in memory. Durable device trust,
+incident lifecycle history, and short News presentation memory live in a small
+local SQLite database. Hermes is the intended long-term Core host, but running
+Core on a local development machine remains fully supported; `core_host`
+describes whichever machine currently runs Core.
+
+## Persistence
+
+Olympus v0.12 opens and migrates SQLite before it accepts Agent connections.
+The default database is `~/.local/share/olympus/core.db`; set
+`persistence.database_path` in the ignored `core/config.toml` to choose another
+location. Parent directories and sensitive files use owner-only permissions on
+Unix-like systems where supported. SQLite runs with foreign keys, WAL, a busy
+timeout, and reliability-oriented synchronous writes so Core and the local admin
+CLI can safely coexist.
+
+The database contains only state whose identity or history matters:
+
+- trusted Agent public keys, fingerprints, enrollment and lifecycle timestamps
+- hashed, expiring, one-use enrollment credentials
+- infrastructure incident start, recovery, duration, and bounded metadata
+- short-lived News presentation fingerprints and highest presented level
+- explicit numbered schema-migration history
+
+Recovered incidents default to 30 days of retention and News presentation
+memory to seven days. Cleanup runs at startup and infrequently during operation.
+An active incident keeps its original start time through a Core restart. If its
+monitor was removed from configuration, startup resolves it as interrupted by
+configuration removal instead of recreating a ghost alert.
+
+Olympus does not persist high-frequency telemetry. CPU, RAM, GPU, temperature,
+network rates, FPS, Minecraft state, Spotify progress, weather, calendar,
+football clocks, News feed contents, particles, and Display broadcasts remain
+ephemeral and are reconstructed from their authoritative sources.
+
+Database-open or migration failure stops Core startup. Persistence failure never
+falls back to unauthenticated operation. `GET /health` reports persistence
+availability without exposing the database path.
+
+## Trusted device enrollment
+
+Agent authentication is secure by default. Each Agent keeps its existing
+permanent Agent ID and creates a persistent Ed25519 private key alongside it.
+The private key never leaves that device. Core stores the public key and binds it
+to the Agent ID. Each later connection signs a fresh, connection-specific
+challenge containing the protocol purpose, Agent ID, and random nonce. Captured
+signatures cannot be replayed against a new challenge, and telemetry is rejected
+until authentication succeeds.
+
+Create one short-lived enrollment credential locally on Core:
+
+```bash
+cd core
+.venv/bin/python -m olympus_core.admin enrollment create
+```
+
+Supply the printed value to an unenrolled Agent for one start only. Prefer a
+temporary environment variable rather than a command-line argument so the
+credential is not placed in a process listing or saved as Agent configuration:
+
+```bash
+OLYMPUS_ENROLLMENT_TOKEN='OLYMPUS-...' python -m olympus_agent.main
+```
+
+Core stores only its SHA-256 hash, consumes it atomically, and never logs the
+plaintext value. The default expiry is ten minutes. Remove the environment
+variable after enrollment; normal reconnects and Core restarts are automatic.
+
+Manage trust with the local CLI—there is deliberately no Web admin API:
+
+```bash
+.venv/bin/python -m olympus_core.admin devices list
+.venv/bin/python -m olympus_core.admin devices revoke <agent-id>
+```
+
+Revocation retains historical metadata, disconnects an active device within the
+configured refresh window, and rejects future reconnects. Re-trusting a revoked
+Agent requires a new token and explicit enrollment. If an Agent private key is
+lost, revoke the old binding, allow the Agent to generate or receive a new local
+key, create a new token, and re-enroll. Never delete its permanent Agent ID just
+to rotate the key. A second device claiming the same ID with a different key is
+rejected.
+
+For isolated legacy development only, `security.require_agent_auth = false`
+restores the old handshake and emits a clear startup warning. This is never the
+default and does not create a wall alert.
+
+> Device authentication verifies Agent identity. Plain `ws://` transport is not
+> encrypted. Use an encrypted transport such as `wss://` or a trusted encrypted
+> network when confidentiality against local network interception is required.
+
+The Display WebSocket and the loopback-only Minecraft-to-Agent protocol are not
+enrolled in v0.12.
+
+### Upgrade from v0.11 to v0.12
+
+1. Upgrade Core and the Agents; keep every existing `agent-id` file.
+2. Start Core so it creates and migrates SQLite.
+3. Create one enrollment token per Agent with the admin command above.
+4. Start each Agent once with `OLYMPUS_ENROLLMENT_TOKEN` in its environment.
+5. Remove the token variable. Future Agent and Core restarts need no manual step.
 
 ## Monitoring configuration
 
@@ -529,11 +627,14 @@ does not stop healthy publishers. If all feeds remain unavailable, recent News
 first becomes stale and then disappears quietly from Idle/Night—never as an
 infrastructure alert.
 
-Olympus retains only a bounded recent in-memory window. It stores publisher
-headlines, short publisher-supplied summaries, source, topic metadata, timestamp,
-and canonical URL. Summary HTML becomes length-limited plain text; obvious
-tracking parameters are removed. Olympus does not download article bodies,
-scrape publisher pages, bypass paywalls, or claim authorship of publisher text.
+Olympus retains feed contents only in a bounded recent in-memory window. It keeps
+publisher headlines, short publisher-supplied summaries, source, topic metadata,
+timestamp, and canonical URL there. SQLite remembers only a short stable story
+fingerprint, highest presented level, and presentation time so a restart cannot
+annoyingly replay the same takeover. Summary HTML becomes length-limited plain
+text; obvious tracking parameters are removed. Olympus does not download article
+bodies, persist an article archive, scrape publisher pages, bypass paywalls, or
+claim authorship of publisher text.
 
 ### Clustering and importance
 
@@ -572,10 +673,10 @@ LIVE MATCHDAY > MAJOR NEWS > GAMING > DEVELOPMENT
 Core owns the exact 20/45-second presentation interval. Reconnecting Displays
 receive the active story and its actual end time. A higher-priority context may
 interrupt News while its timer continues in the background. Cooldown and
-highest-presented-level memory prevent repeated polls or a burst of stories from
-creating a presentation queue. `important → major` escalation may present again.
-Existing clusters establish a silent baseline on Core startup, so restarts never
-replay old “breaking” stories.
+durable highest-presented-level memory prevent repeated polls, Core restarts, or
+a burst of stories from creating a presentation queue. `important → major`
+escalation may present again. Existing clusters also establish a silent baseline
+on Core startup, so restarts never replay old “breaking” stories.
 
 Routine Bayern reporting is capped below takeover level because Matchday is the
 specialized authority. Routine forecasts similarly defer to the Weather
@@ -688,10 +789,11 @@ pip install -r requirements.txt
 python -m olympus_agent.main
 ```
 
-The agent generates a permanent random identity in `~/.olympus/agent-id`, keeps
-one WebSocket open, sends richer machine telemetry every two seconds, and
-reconnects when Core is unavailable. It reports development activity when a
-supported IDE process is running.
+The agent keeps its permanent random identity in `~/.olympus/agent-id` and its
+owner-readable Ed25519 key in `~/.olympus/agent-key.pem`. It keeps one WebSocket
+open, authenticates every connection, sends richer machine telemetry every two
+seconds, and reconnects when Core is unavailable. It reports development
+activity when a supported IDE process is running.
 
 For local development, the agent connects to localhost. When Core is running on
 Hermes on the home LAN, point it at Hermes explicitly:
@@ -705,6 +807,8 @@ Optional settings:
 - `OLYMPUS_TELEMETRY_INTERVAL` — telemetry interval in seconds (default `2`)
 - `OLYMPUS_RECONNECT_DELAY` — retry delay in seconds (default `3`)
 - `OLYMPUS_AGENT_ID_PATH` — identity file override for development/testing
+- `OLYMPUS_AGENT_KEY_PATH` — private-key file override for development/testing
+- `OLYMPUS_ENROLLMENT_TOKEN` — one-use enrollment input; do not save permanently
 - `OLYMPUS_INTEGRATION_PORT` — local observer TCP port (default `38765`)
 - `OLYMPUS_INTEGRATION_STALE_SECONDS` — time before disconnected rich state
   expires (default `5`)
@@ -722,8 +826,8 @@ $env:OLYMPUS_CORE_WS = "ws://10.10.0.10:8000/ws/agents"
 python -m olympus_agent.main
 ```
 
-The permanent random identity is stored in
-`%LOCALAPPDATA%\Olympus\agent-id`. Windows detects the shared IDE set plus
+The permanent random identity and device key are stored in
+`%LOCALAPPDATA%\Olympus\agent-id` and `agent-key.pem`. Windows detects the shared IDE set plus
 Visual Studio 2022 (`devenv.exe`). NVIDIA metrics use NVML when the supported
 driver and binding are available; missing NVIDIA support never stops the agent.
 Known games are matched against their actual client process rather than their
@@ -740,8 +844,8 @@ pip install -r requirements.txt
 OLYMPUS_CORE_WS=ws://10.10.0.10:8000/ws/agents python -m olympus_agent.main
 ```
 
-The permanent random identity is stored under
-`~/.local/state/olympus/agent-id` (or `$XDG_STATE_HOME`). Linux uses available
+The permanent random identity and device key are stored under
+`~/.local/state/olympus/agent-id` and `agent-key.pem` (or `$XDG_STATE_HOME`). Linux uses available
 system sensor interfaces for CPU temperature and omits temperature data when no
 reliable sensor exists.
 
@@ -861,7 +965,7 @@ When the Display is not running on Hermes itself, configure the Core endpoint:
 VITE_OLYMPUS_CORE_WS=ws://10.10.0.10:8000/ws/display npm run dev
 ```
 
-For v0.9, the Display is a browser-based development UI. It is not yet packaged
+For v0.12, the Display is a browser-based development UI. It is not yet packaged
 or deployed as a kiosk.
 
 ## Test
@@ -886,9 +990,8 @@ cd ../integrations/minecraft-fabric
 gradle build
 ```
 
-The current milestone does not include a database, Olympus authentication,
-Docker, kiosk packaging, application control, audio/RGB output, physical display
-control, advanced Matchday analytics, or News. FPS remains an optional external
-Windows input, and
-unavailable metrics are omitted. macOS and Windows CPU temperature remain
-unavailable unless a future reliable local provider is added.
+The current milestone does not include Docker, kiosk packaging, application
+control, audio/RGB output, physical display control, or a Web administration
+surface. FPS remains an optional external Windows input, and unavailable metrics
+are omitted. macOS and Windows CPU temperature remain unavailable unless a
+future reliable local provider is added.

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 import sqlite3
 import tempfile
 import unittest
@@ -11,6 +12,7 @@ from olympus_core.persistence.incidents import IncidentRepository
 from olympus_core.persistence.migrations import apply_migrations
 from olympus_core.persistence.news_memory import NewsMemoryRepository
 from olympus_core.models.monitoring import ActiveAlert, EventSeverity
+from olympus_core.config import parse_core_config
 
 
 class PersistenceTests(unittest.TestCase):
@@ -62,6 +64,12 @@ class PersistenceTests(unittest.TestCase):
         ).fetchone()
         self.assertIsNone(table)
 
+    def test_corrupt_database_fails_initialization(self) -> None:
+        corrupt = Path(self.temporary.name) / "corrupt.db"
+        corrupt.write_bytes(b"not a sqlite database")
+        with self.assertRaises(sqlite3.DatabaseError):
+            Database(corrupt).initialize()
+
     def test_enrollment_is_hashed_atomic_single_use_and_restart_safe(self) -> None:
         enrollment = EnrollmentRepository(self.database)
         created = enrollment.create(now=datetime.now(timezone.utc))
@@ -107,6 +115,30 @@ class PersistenceTests(unittest.TestCase):
                         public_key=b"c" * 32,
                         now=now,
                     )
+
+    def test_simultaneous_token_use_allows_only_one_device(self) -> None:
+        enrollment = EnrollmentRepository(self.database)
+        created = enrollment.create()
+
+        def enroll(agent_id: str, key: bytes) -> str:
+            try:
+                enrollment.enroll(
+                    token=created.token,
+                    agent_id=agent_id,
+                    display_name=agent_id,
+                    platform="linux",
+                    public_key=key,
+                )
+                return "accepted"
+            except EnrollmentError:
+                return "rejected"
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            outcomes = list(executor.map(
+                lambda value: enroll(value[0], value[1]),
+                (("one", b"1" * 32), ("two", b"2" * 32)),
+            ))
+        self.assertEqual(sorted(outcomes), ["accepted", "rejected"])
 
     def test_revoked_device_can_only_be_reenrolled_with_a_new_token(self) -> None:
         enrollment = EnrollmentRepository(self.database)
@@ -163,6 +195,17 @@ class PersistenceTests(unittest.TestCase):
         memory.record("fresh", "important", now - timedelta(days=1))
         self.assertEqual(memory.cleanup(7, now), 1)
         self.assertEqual(set(memory.load(7, now)), {"fresh"})
+
+    def test_security_defaults_secure_and_paths_expand(self) -> None:
+        defaults = parse_core_config({})
+        self.assertTrue(defaults.security.require_agent_auth)
+        configured = parse_core_config({
+            "persistence": {"database_path": "~/olympus-test/core.db"},
+            "security": {"require_agent_auth": False, "auth_timeout_seconds": 0},
+        })
+        self.assertFalse(configured.security.require_agent_auth)
+        self.assertTrue(configured.persistence.resolved_database_path.is_absolute())
+        self.assertEqual(configured.security.auth_timeout_seconds, 1.0)
 
 
 if __name__ == "__main__":

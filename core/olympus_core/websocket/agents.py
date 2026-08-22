@@ -58,7 +58,12 @@ async def _authenticate(
         await _close(websocket, "Authentication failed")
         return False
 
-    device = devices.get(hello.agent_id)
+    try:
+        device = devices.get(hello.agent_id)
+    except Exception as error:
+        logger.error("Agent authentication persistence unavailable for %s: %s", hello.agent_id, error)
+        await _close(websocket, "Authentication unavailable")
+        return False
     if device is None or device.revoked:
         if not hello.enrollment_token:
             await websocket.send_json(
@@ -77,6 +82,10 @@ async def _authenticate(
         except EnrollmentError as error:
             logger.warning("Agent enrollment rejected for %s: %s", hello.agent_id, error)
             await _close(websocket, "Enrollment failed")
+            return False
+        except Exception as error:
+            logger.error("Agent enrollment persistence unavailable for %s: %s", hello.agent_id, error)
+            await _close(websocket, "Enrollment unavailable")
             return False
         logger.info("Agent %s enrolled with trusted device identity", hello.agent_id)
         return True

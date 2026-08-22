@@ -1,9 +1,24 @@
-# Olympus v0.11 configuration. Copy to core/config.toml.
+# Olympus v0.12 configuration. Copy to core/config.toml.
 core_host_poll_seconds = 5
 
 [olympus]
 # IANA timezone used by the room display and calendar interpretation.
 timezone = "Europe/Berlin"
+
+[persistence]
+# Development default. Hermes may use /var/lib/olympus/core.db later.
+database_path = "~/.local/share/olympus/core.db"
+incident_retention_days = 30
+news_memory_retention_days = 7
+
+[security]
+# Secure by default. Disable only for isolated legacy development.
+require_agent_auth = true
+enrollment_token_ttl_minutes = 10
+auth_timeout_seconds = 10
+revocation_refresh_seconds = 30
+# Durable last-seen timestamps are throttled; telemetry itself stays in memory.
+last_seen_write_seconds = 60
 
 [night]
 enabled = true
