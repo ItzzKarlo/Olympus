@@ -3,6 +3,8 @@ from typing import Any
 
 from olympus_core.agents.registry import AgentRegistry
 from olympus_core.display.hub import DisplayHub
+from olympus_core.models.monitoring import EventSeverity
+from olympus_core.services.events import EventService
 from olympus_core.services.state import StateService
 
 
@@ -35,6 +37,23 @@ class DisplayHubTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(display.messages[0]["type"], "state")
         self.assertEqual(display.messages[0]["mode"], "idle")
         self.assertEqual(self.hub.connection_count, 1)
+
+    async def test_reconnecting_display_receives_active_alert(self) -> None:
+        events = EventService()
+        await events.raise_incident(
+            "service:atlas",
+            event_type="service.down",
+            severity=EventSeverity.WARNING,
+            title="Atlas is down",
+            message="Repeated checks failed.",
+            source="atlas",
+        )
+        state = StateService(AgentRegistry(), events=events).display_state()
+        display = FakeWebSocket()
+
+        await self.hub.connect(display, state)  # type: ignore[arg-type]
+
+        self.assertEqual(display.messages[0]["alerts"][0]["title"], "Atlas is down")
 
     async def test_broken_display_does_not_block_healthy_display(self) -> None:
         healthy = FakeWebSocket()

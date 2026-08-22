@@ -22,7 +22,7 @@ Examples include:
 - football matchday mode
 
 
-## Architecture
+## System flow
 
 Olympus is split into three main components.
 
@@ -75,17 +75,35 @@ Agents send this information to the Olympus Core.
 > Agents observe devices. Core interprets reality. Display renders reality.
 
 
-## Initial architecture
+## Architecture
 
 ```text
-macOS Agent ──/ws/agents──> Olympus Core ──/ws/display──> Display
-    │                              │                          │
-    └─ observes CPU, RAM, and IDEs  └─ interprets global mode └─ renders state
+macOS / Windows / Linux Agents
+             │
+             │ /ws/agents
+             ▼
+        Olympus Core ─────────/ws/display────────> Display
+             │                                      │
+             ├─ mode + media state                   ├─ active scene
+             ├─ Core host awareness                  └─ event overlays
+             ├─ LAN / Internet diagnostics
+             ├─ target + service monitors
+             └─ active incidents + recoveries
 ```
 
-Olympus v0.3 implements this full local path. The agent owns device-specific
-observation, Core owns mode selection and media collection, and the Display
-consumes only Core's interpreted state.
+Olympus v0.4 implements this full local path. Agents own device-specific
+observation, Core owns interpretation and monitoring, and the Display consumes
+only Core's normalized state.
+
+Primary scene priority remains:
+
+```text
+DEVELOPMENT > MEDIA > IDLE
+```
+
+Alerts do not become another normal mode. They overlay whichever scene is
+already active. When Core confirms recovery, it sends a temporary recovery event
+with measured downtime, then the Display returns to the unchanged scene below.
 
 ## Run Olympus Core
 
@@ -111,7 +129,59 @@ Core exposes:
 - `WS /ws/agents` — persistent agent connection
 - `WS /ws/display` — live interpreted state for displays
 
-State is intentionally held in memory for this milestone.
+State is intentionally held in memory for this milestone. Hermes is the intended
+long-term Core host, but running Core on a local development machine remains fully
+supported; `core_host` describes whichever machine currently runs Core.
+
+## Monitoring configuration
+
+Core always observes its own host CPU, RAM, disk, and uptime. Network targets and
+services are configured locally in TOML so the Display cannot create arbitrary
+probes.
+
+```bash
+cd core
+cp config.example.toml config.toml
+```
+
+The ignored `core/config.toml` can configure:
+
+- gateway, external IP, DNS, and HTTPS diagnostics
+- important LAN or Meshnet targets using read-only TCP reachability checks
+- HTTP, HTTPS, and TCP service health checks
+- independent polling intervals, timeouts, and failure/recovery thresholds
+
+Example target:
+
+```toml
+[[network.targets]]
+id = "atlas"
+name = "Atlas"
+host = "100.x.x.x"
+port = 22
+alert = true
+```
+
+Example service:
+
+```toml
+[[services]]
+id = "minecraft"
+name = "Minecraft"
+type = "tcp"
+host = "10.10.0.10"
+port = 25565
+severity = "warning"
+```
+
+Use `OLYMPUS_CONFIG=/absolute/path/to/config.toml` to select another file.
+Monitoring operations have fixed timeouts and run independently so one slow
+service cannot block host, network, agent, or Spotify updates.
+
+Failures and recoveries are debounced. A single lost request does not produce an
+incident; repeated failures create one persistent active alert, and repeated
+successes resolve it. A reconnecting Display immediately receives current active
+alerts in the full state snapshot.
 
 ## Optional Spotify integration
 
@@ -188,9 +258,9 @@ python -m olympus_agent.main
 ```
 
 The agent generates a permanent random identity in `~/.olympus/agent-id`, keeps
-one WebSocket open, sends CPU/RAM telemetry every two seconds, and reconnects when
-Core is unavailable. It reports development activity when a supported IDE process
-is running.
+one WebSocket open, sends richer machine telemetry every two seconds, and
+reconnects when Core is unavailable. It reports development activity when a
+supported IDE process is running.
 
 For local development, the agent connects to localhost. When Core is running on
 Hermes on the home LAN, point it at Hermes explicitly:
@@ -204,6 +274,44 @@ Optional settings:
 - `OLYMPUS_TELEMETRY_INTERVAL` — telemetry interval in seconds (default `2`)
 - `OLYMPUS_RECONNECT_DELAY` — retry delay in seconds (default `3`)
 - `OLYMPUS_AGENT_ID_PATH` — identity file override for development/testing
+
+## Run the Windows agent
+
+In PowerShell:
+
+```powershell
+cd agents\windows
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+$env:OLYMPUS_CORE_WS = "ws://10.10.0.10:8000/ws/agents"
+python -m olympus_agent.main
+```
+
+The permanent random identity is stored in
+`%LOCALAPPDATA%\Olympus\agent-id`. Windows detects the shared IDE set plus
+Visual Studio 2022 (`devenv.exe`). NVIDIA metrics use NVML when the supported
+driver and binding are available; missing NVIDIA support never stops the agent.
+
+## Run the Linux agent
+
+```bash
+cd agents/linux
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+OLYMPUS_CORE_WS=ws://10.10.0.10:8000/ws/agents python -m olympus_agent.main
+```
+
+The permanent random identity is stored under
+`~/.local/state/olympus/agent-id` (or `$XDG_STATE_HOME`). Linux uses available
+system sensor interfaces for CPU temperature and omits temperature data when no
+reliable sensor exists.
+
+All agents report CPU, RAM, uptime, root storage, network byte counters, and IDE
+activity. GPU and temperature fields are optional and are omitted when the local
+platform cannot provide a trustworthy reading. Olympus never substitutes fake
+zero values for unavailable hardware metrics.
 
 ## Run the Display
 
@@ -223,7 +331,7 @@ When the Display is not running on Hermes itself, configure the Core endpoint:
 VITE_OLYMPUS_CORE_WS=ws://10.10.0.10:8000/ws/display npm run dev
 ```
 
-For v0.3, the Display is a browser-based development UI. It is not yet packaged
+For v0.4, the Display is a browser-based development UI. It is not yet packaged
 or deployed as a kiosk.
 
 ## Test
@@ -235,10 +343,17 @@ python -m unittest discover -s tests
 cd ../agents/macos
 python -m unittest discover -s tests
 
+cd ../windows
+python -m unittest discover -s tests
+
+cd ../linux
+python -m unittest discover -s tests
+
 cd ../../display
 npm run build
 ```
 
 The current milestone does not include a database, Olympus authentication,
-Docker, kiosk packaging, or future scenes and integrations. Windows and Linux
-agents remain future work.
+Docker, kiosk packaging, FPS capture, gaming, Matchday, or future information
+scenes. macOS and Windows CPU temperature remain unavailable unless a future
+reliable local provider is added.

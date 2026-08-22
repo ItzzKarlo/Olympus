@@ -4,12 +4,16 @@ from datetime import datetime, timezone
 import platform
 import socket
 import time
+import logging
 
 import psutil
 
 from olympus_core.models.monitoring import CoreHostState
 from olympus_core.models.telemetry import StorageTelemetry, SystemTelemetry
 from olympus_core.services.monitoring_store import MonitoringStore
+
+
+logger = logging.getLogger(__name__)
 
 
 class CoreHostCollector:
@@ -48,8 +52,11 @@ class CoreHostCollector:
 
     async def run(self, stop: asyncio.Event) -> None:
         while not stop.is_set():
-            self.collect_once()
-            await self._on_update()
+            try:
+                self.collect_once()
+                await self._on_update()
+            except Exception as error:
+                logger.warning("Core host telemetry temporarily unavailable: %s", error)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=self._poll_seconds)
             except TimeoutError:

@@ -2,6 +2,8 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from typing import Protocol
+import logging
+import time
 
 import httpx
 
@@ -11,6 +13,9 @@ from olympus_core.monitoring.probes import ProbeResult, http_probe, tcp_probe
 from olympus_core.monitoring.transitions import TransitionTracker
 from olympus_core.services.events import EventService
 from olympus_core.services.monitoring_store import MonitoringStore
+
+
+logger = logging.getLogger(__name__)
 
 
 class ServiceProbe(Protocol):
@@ -43,6 +48,7 @@ class ServiceCollector:
         self._events = events
         self._probe = probe
         self._on_update = on_update
+        self._last_error_log_at = 0.0
         self._trackers = {
             service.id: TransitionTracker(
                 config.service_failure_threshold,
@@ -112,7 +118,10 @@ class ServiceCollector:
         while not stop.is_set():
             try:
                 await self.poll_once()
-            except Exception:
+            except Exception as error:
+                if time.monotonic() - self._last_error_log_at >= 60:
+                    logger.warning("Service collector temporarily unavailable: %s", error)
+                    self._last_error_log_at = time.monotonic()
                 await self._on_update()
             try:
                 await asyncio.wait_for(

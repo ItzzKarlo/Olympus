@@ -2,6 +2,8 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from typing import Protocol
+import logging
+import time
 
 import httpx
 
@@ -17,6 +19,9 @@ from olympus_core.monitoring.probes import ProbeResult, dns_probe, http_probe, t
 from olympus_core.monitoring.transitions import StatusTransition, TransitionTracker
 from olympus_core.services.events import EventService
 from olympus_core.services.monitoring_store import MonitoringStore
+
+
+logger = logging.getLogger(__name__)
 
 
 class NetworkProbeSet(Protocol):
@@ -63,6 +68,7 @@ class NetworkCollector:
         self._events = events
         self._probes = probes
         self._on_update = on_update
+        self._last_error_log_at = 0.0
         names = ["gateway", "internet", "dns", "https"] + [
             f"target:{target.id}" for target in config.targets
         ]
@@ -215,9 +221,12 @@ class NetworkCollector:
         while not stop.is_set():
             try:
                 await self.poll_once()
-            except Exception:
+            except Exception as error:
                 # Individual probe failures are normalized; this protects the loop
                 # from an unexpected collector-level parsing/configuration error.
+                if time.monotonic() - self._last_error_log_at >= 60:
+                    logger.warning("Network collector temporarily unavailable: %s", error)
+                    self._last_error_log_at = time.monotonic()
                 await self._on_update()
             try:
                 await asyncio.wait_for(stop.wait(), timeout=self._config.poll_seconds)
