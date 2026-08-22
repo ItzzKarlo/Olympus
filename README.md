@@ -91,14 +91,14 @@ macOS / Windows / Linux Agents
              └─ active incidents + recoveries
 ```
 
-Olympus v0.4 implements this full local path. Agents own device-specific
+Olympus v0.5 implements this full local path. Agents own device-specific
 observation, Core owns interpretation and monitoring, and the Display consumes
 only Core's normalized state.
 
 Primary scene priority remains:
 
 ```text
-DEVELOPMENT > MEDIA > IDLE
+GAMING > DEVELOPMENT > MEDIA > IDLE
 ```
 
 Alerts do not become another normal mode. They overlay whichever scene is
@@ -151,14 +151,20 @@ The ignored `core/config.toml` can configure:
 - HTTP, HTTPS, and TCP service health checks
 - independent polling intervals, timeouts, and failure/recovery thresholds
 
+The gateway defaults to `auto`. Core resolves the host's current default route
+on every network collection cycle, so moving between the home LAN, another
+Wi-Fi network, and a hotspot does not require a restart. Set `gateway` to an
+explicit IP only when an override is intentional. Display state includes the
+resolved host and whether it came from automatic detection or configuration.
+
 Example target:
 
 ```toml
 [[network.targets]]
-id = "atlas"
-name = "Atlas"
-host = "100.x.x.x"
-port = 22
+id = "nas"
+name = "Home NAS"
+host = "10.10.0.20"
+port = 443
 alert = true
 ```
 
@@ -189,11 +195,15 @@ Spotify is entirely optional. Without Spotify credentials, Olympus starts and
 runs normally with Idle and Development scenes.
 
 When configured, Core polls the current playback and queue, normalizes that data,
-and publishes it to the Display. Scene priority is:
+and publishes it to the Display. Media remains available underneath higher
+priority activity, so the scene can return immediately when a game or IDE closes.
+The relevant transitions are:
 
 ```text
 Spotify playing → MEDIA
 IDE active      → DEVELOPMENT overrides MEDIA
+Game active     → GAMING overrides DEVELOPMENT and MEDIA
+Game closes     → DEVELOPMENT, MEDIA, or IDLE from current state
 IDE closes      → MEDIA resumes
 Spotify pauses  → IDLE
 ```
@@ -292,6 +302,9 @@ The permanent random identity is stored in
 `%LOCALAPPDATA%\Olympus\agent-id`. Windows detects the shared IDE set plus
 Visual Studio 2022 (`devenv.exe`). NVIDIA metrics use NVML when the supported
 driver and binding are available; missing NVIDIA support never stops the agent.
+Known games are matched against their actual client process rather than their
+launcher, then confirmed against the foreground window. A configurable grace
+period keeps the session stable during brief Alt-Tabs.
 
 ## Run the Linux agent
 
@@ -313,6 +326,52 @@ activity. GPU and temperature fields are optional and are omitted when the local
 platform cannot provide a trustworthy reading. Olympus never substitutes fake
 zero values for unavailable hardware metrics.
 
+## Gaming mode
+
+Gaming is a normalized activity, not a collection of executable checks inside
+Core. Windows and Linux agents identify a game through small, testable platform
+profiles and report its stable ID and name. Core chooses the active gaming
+machine, tracks the in-memory session start, and applies this priority:
+
+```text
+GAMING > DEVELOPMENT > MEDIA > IDLE
+```
+
+The first profiles cover Fortnite, Minecraft, Among Us, Goat Simulator, and Goat
+Simulator 3 where each title can be identified safely. Minecraft matching is
+deliberately conservative: a generic Java process is never enough. On Windows,
+the Epic launcher and other launchers do not trigger Gaming mode.
+
+The Display has a separate presentation registry. Fortnite, Minecraft, Among Us,
+and Goat Simulator each receive a distinct Olympus theme, ambient motif, and
+restrained particle behavior. An unknown normalized game receives a stable theme
+derived from its ID instead of failing. The Gaming scene shows only available
+CPU, RAM, GPU, temperature, VRAM, FPS, and network readings. Generic network
+diagnostic latency is explicitly labeled `Internet`; it is not presented as
+in-game server ping.
+
+Optional gaming settings:
+
+- `OLYMPUS_GAME_BACKGROUND_GRACE_SECONDS` — seconds a foreground game remains
+  active after an Alt-Tab (default `15`)
+- `OLYMPUS_PRESENTMON_CSV` — Windows path to a continuously updated external
+  PresentMon CSV file; unset by default
+
+FPS is optional. When `OLYMPUS_PRESENTMON_CSV` is set, the Windows agent reads
+recent `FrameTime` or `MsBetweenPresents` rows for the active game and derives a
+short rolling frame rate. Olympus does not launch PresentMon, and a missing,
+stale, unreadable, or incompatible file simply omits FPS. PresentMon is an
+external ETW-based tool; see its [official project](https://github.com/GameTechDev/PresentMon)
+and [console documentation](https://github.com/GameTechDev/PresentMon/blob/main/README-ConsoleApplication.md)
+for installation and capture options.
+
+The gaming foundation is intentionally anti-cheat-conscious. It uses external
+process observation, Windows foreground APIs, ordinary system telemetry, and
+optional external presentation data. It does not inject code, hook DirectX,
+scan protected memory, bypass anti-cheat, or claim deep in-game data. Player
+count, kills, health, inventory, coordinates, and actual game-server latency are
+not part of v0.5.
+
 ## Run the Display
 
 ```bash
@@ -331,7 +390,7 @@ When the Display is not running on Hermes itself, configure the Core endpoint:
 VITE_OLYMPUS_CORE_WS=ws://10.10.0.10:8000/ws/display npm run dev
 ```
 
-For v0.4, the Display is a browser-based development UI. It is not yet packaged
+For v0.5, the Display is a browser-based development UI. It is not yet packaged
 or deployed as a kiosk.
 
 ## Test
@@ -354,6 +413,7 @@ npm run build
 ```
 
 The current milestone does not include a database, Olympus authentication,
-Docker, kiosk packaging, FPS capture, gaming, Matchday, or future information
-scenes. macOS and Windows CPU temperature remain unavailable unless a future
-reliable local provider is added.
+Docker, kiosk packaging, deep game integrations, Matchday, or future information
+scenes. FPS remains an optional external Windows input, and unavailable metrics
+are omitted. macOS and Windows CPU temperature remain unavailable unless a
+future reliable local provider is added.

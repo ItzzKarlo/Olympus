@@ -110,13 +110,17 @@ function buildTheme(colors: Rgb[]): SceneTheme {
     danger: isDark ? "#D47A7A" : "#B95151",
     info: rgbToHex(accentTwo),
     grid: isDark ? "rgba(255, 255, 255, 0.045)" : rgba(accent, 0.05),
-    particles: [
-      rgbToHex(accent),
-      rgbToHex(accentTwo),
-      rgbToHex(third),
-      rgbToHex(mix(primary, secondary, 0.35)),
-      rgbToHex(mix(secondary, third, 0.4)),
-    ],
+    particles: {
+      colors: [
+        rgbToHex(accent),
+        rgbToHex(accentTwo),
+        rgbToHex(third),
+        rgbToHex(mix(primary, secondary, 0.35)),
+        rgbToHex(mix(secondary, third, 0.4)),
+      ],
+      density: 0.88,
+      speed: 0.72,
+    },
   };
 }
 

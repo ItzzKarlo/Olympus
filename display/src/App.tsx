@@ -7,6 +7,7 @@ import { useOlympusState } from "./hooks/useOlympusState";
 import { useSceneTheme } from "./hooks/useSceneTheme";
 import { DevelopmentMode } from "./modes/Development/DevelopmentMode";
 import { IdleMode } from "./modes/Idle/IdleMode";
+import { GamingMode } from "./modes/Gaming/GamingMode";
 import { MediaMode } from "./modes/Media/MediaMode";
 import { sceneStyle } from "./theme/SceneTheme";
 import { idleTheme } from "./theme/themes";
@@ -14,7 +15,7 @@ import { idleTheme } from "./theme/themes";
 function StartupScreen() {
   return (
     <main className="startup-screen">
-      <ParticleField colors={idleTheme.particles} />
+      <ParticleField theme={idleTheme.particles} />
       <Brand />
       <div className="startup-screen__message">
         <span className="startup-screen__orbit" aria-hidden="true" />
@@ -34,7 +35,9 @@ export default function App() {
 
   if (state === null) return <StartupScreen />;
 
-  const scene = state.mode === "development" ? (
+  const scene = state.mode === "gaming" && state.gaming ? (
+      <GamingMode connectionStatus={connectionStatus} now={now} state={state} />
+    ) : state.mode === "development" ? (
       <DevelopmentMode
         connectionStatus={connectionStatus}
         now={now}
@@ -48,7 +51,10 @@ export default function App() {
 
   return (
     <main className={`olympus-display mode-${state.mode}`} style={sceneStyle(theme)}>
-      <ParticleField colors={theme.particles} />
+      <ParticleField
+        key={`${state.mode}:${state.gaming?.game.id ?? ""}`}
+        theme={theme.particles}
+      />
       <div key={state.mode} className="scene-transition">
         {scene}
       </div>

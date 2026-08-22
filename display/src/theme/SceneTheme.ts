@@ -17,7 +17,14 @@ export interface SceneTheme {
   danger: string;
   info: string;
   grid: string;
-  particles: string[];
+  particles: ParticleTheme;
+}
+
+export interface ParticleTheme {
+  colors: string[];
+  density?: number;
+  shape?: "confetti" | "mixed" | "square";
+  speed?: number;
 }
 
 export type SceneStyle = CSSProperties & Record<`--${string}`, string>;

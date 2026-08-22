@@ -12,28 +12,28 @@ class EventServiceTests(unittest.IsolatedAsyncioTestCase):
         events = EventService()
         started = datetime(2026, 8, 22, 17, 0, tzinfo=timezone.utc)
         first = await events.raise_incident(
-            "service:atlas",
+            "service:nas",
             event_type="service.down",
             severity=EventSeverity.CRITICAL,
-            title="Atlas is down",
+            title="NAS is down",
             message="Repeated checks failed.",
-            source="atlas",
+            source="nas",
             timestamp=started,
         )
         duplicate = await events.raise_incident(
-            "service:atlas",
+            "service:nas",
             event_type="service.down",
             severity=EventSeverity.CRITICAL,
-            title="Atlas is down",
+            title="NAS is down",
             message="Repeated checks failed.",
-            source="atlas",
+            source="nas",
             timestamp=started + timedelta(seconds=5),
         )
 
         state = StateService(AgentRegistry(), events=events).display_state()
         self.assertEqual(first.id, duplicate.id)
         self.assertEqual(len(state.alerts), 1)
-        self.assertEqual(state.alerts[0].title, "Atlas is down")
+        self.assertEqual(state.alerts[0].title, "NAS is down")
 
     async def test_recovery_resolves_alert_and_calculates_downtime(self) -> None:
         events = EventService(recovery_seconds=6)

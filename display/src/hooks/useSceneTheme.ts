@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { fallbackMediaTheme, mediaThemeFromArtwork } from "../theme/mediaPalette";
+import { getGamePresentation } from "../modes/Gaming/gameThemes";
 import type { SceneTheme } from "../theme/SceneTheme";
 import { developmentTheme, idleTheme } from "../theme/themes";
 import type { OlympusState } from "../types/state";
@@ -28,6 +29,9 @@ export function useSceneTheme(state: OlympusState | null): SceneTheme {
     };
   }, [artworkUrl, key]);
 
+  if (state?.mode === "gaming" && state.gaming) {
+    return getGamePresentation(state.gaming.game.id, state.gaming.game.name).theme;
+  }
   if (state?.mode === "development") return developmentTheme;
   if (state?.mode === "media") return mediaTheme?.theme ?? initialFallback;
   return idleTheme;

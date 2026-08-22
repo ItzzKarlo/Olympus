@@ -1,4 +1,4 @@
-# Olympus v0.4 monitoring configuration. Copy to core/config.toml.
+# Olympus v0.5 monitoring configuration. Copy to core/config.toml.
 core_host_poll_seconds = 5
 
 [network]
@@ -16,10 +16,10 @@ recovery_threshold = 2
 
 # Add important LAN or Meshnet targets. Targets are read-only TCP checks.
 # [[network.targets]]
-# id = "atlas"
-# name = "Atlas"
-# host = "100.x.x.x"
-# port = 22
+# id = "nas"
+# name = "Home NAS"
+# host = "10.10.0.20"
+# port = 443
 # alert = true
 
 [service_monitoring]

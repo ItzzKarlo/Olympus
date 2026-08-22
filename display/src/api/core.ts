@@ -1,5 +1,5 @@
 import type {
-  ActivityMode, ActivityTelemetry, ActiveAlert, CoreHostState, GpuTelemetry,
+  ActivityMode, ActivityTelemetry, ActiveAlert, CoreHostState, GameInfo, GamingState, GpuTelemetry,
   MachineState, MediaAlbum, MediaArtist, MediaContext, MediaQueueTrack,
   MediaState, MediaTrack, NetworkState, NetworkTelemetry, OlympusState,
   ProbeState, RecoveryNotice, ServiceState, StorageTelemetry, SystemTelemetry,
@@ -55,9 +55,16 @@ function isGpuTelemetry(value: unknown): value is GpuTelemetry {
     isOptionalNumber(value.memory_total_bytes) && isOptionalNumber(value.temperature_celsius);
 }
 
+function isGameInfo(value: unknown): value is GameInfo {
+  return isRecord(value) && typeof value.id === "string" && value.id.length > 0 &&
+    typeof value.name === "string" && value.name.length > 0;
+}
+
 function isActivityTelemetry(value: unknown): value is ActivityTelemetry {
   return isRecord(value) && isActivityMode(value.mode) &&
-    isNullableString(value.application) && isNullableString(value.process_name);
+    isNullableString(value.application) && isNullableString(value.process_name) &&
+    (value.game === undefined || value.game === null || isGameInfo(value.game)) &&
+    isOptionalNumber(value.fps);
 }
 
 function isMachineState(value: unknown): value is MachineState {
@@ -115,10 +122,17 @@ function isProbeState(value: unknown): value is ProbeState {
 }
 
 function isNetworkState(value: unknown): value is NetworkState {
-  return isRecord(value) && isProbeState(value.gateway) && isProbeState(value.dns) &&
+  return isRecord(value) && isProbeState(value.gateway) && isRecord(value.gateway) &&
+    (value.gateway.host === undefined || isNullableString(value.gateway.host)) &&
+    (value.gateway.source === undefined || typeof value.gateway.source === "string") && isProbeState(value.dns) &&
     isProbeState(value.internet) && isProbeState(value.https) && isRecord(value.targets) &&
     Object.values(value.targets).every((target) => isProbeState(target) && isRecord(target) &&
       typeof target.id === "string" && typeof target.name === "string");
+}
+
+function isGamingState(value: unknown): value is GamingState {
+  return isRecord(value) && isGameInfo(value.game) &&
+    typeof value.session_started_at === "string" && isOptionalNumber(value.fps);
 }
 
 function isServiceState(value: unknown): value is ServiceState {
@@ -155,6 +169,11 @@ function normalizeMachine(machine: MachineState): MachineState {
     network: machine.network ?? null,
     temperatures: machine.temperatures ?? null,
     gpu: machine.gpu ?? null,
+    activity: machine.activity ? {
+      ...machine.activity,
+      game: machine.activity.game ?? null,
+      fps: machine.activity.fps ?? null,
+    } : null,
   };
 }
 
@@ -165,6 +184,7 @@ export function parseStateMessage(rawMessage: string): OlympusState | null {
     !(typeof value.active_device === "string" || value.active_device === null) ||
     typeof value.generated_at !== "string" || !isRecord(value.machines) ||
     !Object.values(value.machines).every(isMachineState) ||
+    !(value.gaming === undefined || value.gaming === null || isGamingState(value.gaming)) ||
     !(value.media === undefined || value.media === null || isMediaState(value.media)) ||
     !(value.core_host === undefined || value.core_host === null || isCoreHostState(value.core_host)) ||
     !(value.network === undefined || value.network === null || isNetworkState(value.network)) ||
@@ -178,6 +198,7 @@ export function parseStateMessage(rawMessage: string): OlympusState | null {
     machines: Object.fromEntries(Object.entries(value.machines).map(([id, machine]) =>
       [id, normalizeMachine(machine as unknown as MachineState)])),
     media: (value.media as MediaState | null | undefined) ?? null,
+    gaming: (value.gaming as GamingState | null | undefined) ?? null,
     core_host: (value.core_host as CoreHostState | null | undefined) ?? null,
     network: (value.network as NetworkState | null | undefined) ?? null,
     services: (value.services as Record<string, ServiceState> | undefined) ?? {},

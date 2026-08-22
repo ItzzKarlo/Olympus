@@ -49,7 +49,7 @@ class NetworkCollectorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(events.active_alerts()[0].type, "network.https.down")
 
     async def test_remote_target_failure_uses_diagnostic_language(self) -> None:
-        target = TargetConfig("atlas", "Atlas", "100.0.0.1", 22)
+        target = TargetConfig("nas", "Home NAS", "10.10.0.20", 443)
         config = NetworkConfig(
             failure_threshold=1,
             recovery_threshold=1,
@@ -66,14 +66,14 @@ class NetworkCollectorTests(unittest.IsolatedAsyncioTestCase):
                     "internet": ProbeResult(True, 12),
                     "dns": ProbeResult(True, 5),
                     "https": ProbeResult(True, 20),
-                    "target:atlas": ProbeResult(False),
+                    "target:nas": ProbeResult(False),
                 }
             ),
             no_update,
         )
         await collector.poll_once()
         alert = events.active_alerts()[0]
-        self.assertEqual(alert.title, "Atlas unreachable")
+        self.assertEqual(alert.title, "Home NAS unreachable")
         self.assertIn("Meshnet", alert.message)
 
 

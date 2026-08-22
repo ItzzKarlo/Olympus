@@ -37,10 +37,17 @@ export interface GpuTelemetry {
   temperature_celsius: number | null;
 }
 
+export interface GameInfo {
+  id: string;
+  name: string;
+}
+
 export interface ActivityTelemetry {
   mode: ActivityMode;
   application: string | null;
   process_name: string | null;
+  game: GameInfo | null;
+  fps: number | null;
 }
 
 export interface MachineState {
@@ -66,13 +73,18 @@ export interface ProbeState {
   last_checked: string | null;
 }
 
+export interface GatewayProbeState extends ProbeState {
+  host: string | null;
+  source: string;
+}
+
 export interface NetworkTargetState extends ProbeState {
   id: string;
   name: string;
 }
 
 export interface NetworkState {
-  gateway: ProbeState;
+  gateway: GatewayProbeState;
   dns: ProbeState;
   internet: ProbeState;
   https: ProbeState;
@@ -167,12 +179,19 @@ export interface MediaState {
   queue: MediaQueueTrack[];
 }
 
+export interface GamingState {
+  game: GameInfo;
+  session_started_at: string;
+  fps: number | null;
+}
+
 export interface OlympusState {
   type: "state";
   mode: ActivityMode;
   active_device: string | null;
   generated_at: string;
   machines: Record<string, MachineState>;
+  gaming: GamingState | null;
   media: MediaState | null;
   core_host: CoreHostState | null;
   network: NetworkState | null;

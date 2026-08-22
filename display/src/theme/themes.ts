@@ -18,7 +18,9 @@ export const idleTheme: SceneTheme = {
   danger: "#C65C5C",
   info: "#4E89B8",
   grid: "rgba(91, 111, 216, 0.045)",
-  particles: ["#5B6FD8", "#3F8F67", "#C88A32", "#C65C5C", "#4E89B8"],
+  particles: {
+    colors: ["#5B6FD8", "#3F8F67", "#C88A32", "#C65C5C", "#4E89B8"],
+  },
 };
 
 export const developmentTheme: SceneTheme = {
@@ -35,5 +37,9 @@ export const developmentTheme: SceneTheme = {
   accentSoft: "#E2E8F4",
   info: "#3F7F9D",
   grid: "rgba(63, 91, 125, 0.05)",
-  particles: ["#4C67A8", "#3F7F9D", "#6B5CA5", "#7895AA", "#3F8F82"],
+  particles: {
+    colors: ["#4C67A8", "#3F7F9D", "#6B5CA5", "#7895AA", "#3F8F82"],
+    density: 0.9,
+    speed: 0.82,
+  },
 };

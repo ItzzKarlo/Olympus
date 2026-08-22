@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 
+import type { ParticleTheme } from "../theme/SceneTheme";
+
 type ConfettiShape = "circle" | "dash" | "square" | "triangle";
 
 interface Particle {
@@ -41,13 +43,22 @@ function parseColor(color: string): Rgb {
 }
 
 interface ParticleFieldProps {
-  colors?: string[];
+  theme?: ParticleTheme;
 }
 
-export function ParticleField({ colors = DEFAULT_COLORS }: ParticleFieldProps) {
+function shapesFor(family: ParticleTheme["shape"]): ConfettiShape[] {
+  if (family === "square") return ["square"];
+  if (family === "confetti") return ["dash", "square", "triangle"];
+  return SHAPES;
+}
+
+export function ParticleField({ theme }: ParticleFieldProps) {
+  const colors = theme?.colors ?? DEFAULT_COLORS;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const paletteRef = useRef<Rgb[]>(colors.map(parseColor));
+  const themeRef = useRef(theme);
   paletteRef.current = (colors.length > 0 ? colors : DEFAULT_COLORS).map(parseColor);
+  themeRef.current = theme;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -62,16 +73,21 @@ export function ParticleField({ colors = DEFAULT_COLORS }: ParticleFieldProps) {
 
     const createParticles = () => {
       const mobile = width < 720;
+      const density = Math.min(1.35, Math.max(0.6, themeRef.current?.density ?? 1));
       const count = Math.min(
         mobile ? 44 : 96,
-        Math.round((width * height) / (mobile ? 17_000 : 19_000)),
+        Math.round(((width * height) / (mobile ? 17_000 : 19_000)) * density),
       );
 
       const nextParticles: Particle[] = [];
-      const particleCount = Math.max(count, mobile ? 28 : 54);
+      const particleCount = Math.max(
+        count,
+        Math.round((mobile ? 28 : 54) * density),
+      );
 
       for (let index = 0; index < particleCount; index += 1) {
-        const shape = SHAPES[index % SHAPES.length];
+        const shapes = shapesFor(themeRef.current?.shape);
+        const shape = shapes[index % shapes.length];
         const particleWidth = 3 + Math.random() * 5;
         const particleHeight =
           shape === "dash" ? particleWidth * 2.4 : particleWidth;
@@ -92,7 +108,8 @@ export function ParticleField({ colors = DEFAULT_COLORS }: ParticleFieldProps) {
         }
 
         const direction = Math.random() * Math.PI * 2;
-        const speed = 0.07 + Math.random() * 0.11;
+        const speedScale = Math.min(1.55, Math.max(0.55, themeRef.current?.speed ?? 1));
+        const speed = (0.07 + Math.random() * 0.11) * speedScale;
         const colorIndex = index % paletteRef.current.length;
         nextParticles.push({
           collisionRadius,
@@ -216,9 +233,10 @@ export function ParticleField({ colors = DEFAULT_COLORS }: ParticleFieldProps) {
           particle.vy *= 0.9995;
 
           const speed = Math.hypot(particle.vx, particle.vy);
-          if (speed > MAX_SPEED) {
-            particle.vx = (particle.vx / speed) * MAX_SPEED;
-            particle.vy = (particle.vy / speed) * MAX_SPEED;
+          const maximumSpeed = MAX_SPEED * Math.min(1.55, Math.max(0.55, themeRef.current?.speed ?? 1));
+          if (speed > maximumSpeed) {
+            particle.vx = (particle.vx / speed) * maximumSpeed;
+            particle.vy = (particle.vy / speed) * maximumSpeed;
           }
 
           particle.x += particle.vx;
