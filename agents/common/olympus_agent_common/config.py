@@ -12,6 +12,13 @@ from olympus_agent_common.paths import AgentPaths
 DEFAULT_CORE_WS = "ws://127.0.0.1:8000/ws/agents"
 
 
+def validate_display_name(value: str) -> str:
+    name = value.strip()
+    if not name or len(name) > 255 or any(not character.isprintable() for character in name):
+        raise ValueError("Display name must contain between 1 and 255 printable characters")
+    return name
+
+
 def validate_core_url(value: str) -> str:
     candidate = value.strip()
     parsed = urlsplit(candidate)
@@ -68,9 +75,7 @@ def read_config_file(path: Path) -> dict[str, Any]:
 
 def write_config_file(path: Path, core_url: str, display_name: str) -> None:
     validated_url = validate_core_url(core_url)
-    name = display_name.strip()
-    if not name or len(name) > 255:
-        raise ValueError("Display name must contain between 1 and 255 characters")
+    name = validate_display_name(display_name)
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     escaped_url = validated_url.replace("\\", "\\\\").replace('"', '\\"')
     escaped_name = name.replace("\\", "\\\\").replace('"', '\\"')
@@ -121,14 +126,12 @@ class AgentConfig:
             or configured_url
             or DEFAULT_CORE_WS
         )
-        name = (
+        name = validate_display_name(
             display_name_override
             or env.get("OLYMPUS_AGENT_DISPLAY_NAME")
             or configured_name
             or socket.gethostname()
-        ).strip()
-        if not name or len(name) > 255:
-            raise ValueError("Agent display name must contain between 1 and 255 characters")
+        )
         return cls(
             core_ws_url=validate_core_url(url),
             telemetry_interval=_positive_float(env, "OLYMPUS_TELEMETRY_INTERVAL", 2.0),

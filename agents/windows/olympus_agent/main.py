@@ -1,7 +1,6 @@
 import platform
 
 from olympus_agent import __version__
-from olympus_agent.config import AgentConfig
 from olympus_agent.telemetry import collect_telemetry, configure_game_detection
 from olympus_agent_common.cli import AgentApplication, run_cli
 from olympus_agent_common.paths import agent_paths

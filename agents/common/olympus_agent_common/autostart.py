@@ -3,7 +3,6 @@ import getpass
 import os
 from pathlib import Path
 import plistlib
-import shlex
 import subprocess
 import tempfile
 from typing import Callable

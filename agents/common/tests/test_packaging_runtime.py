@@ -1,4 +1,5 @@
 from contextlib import redirect_stdout
+import asyncio
 import io
 import logging
 from pathlib import Path
@@ -21,6 +22,7 @@ from olympus_agent_common.identity import migrate_legacy_identity
 from olympus_agent_common.instance import SingleInstance, is_instance_running
 from olympus_agent_common.logging_config import configure_logging
 from olympus_agent_common.paths import AgentPaths, agent_paths
+from olympus_agent_common.runtime import run_forever
 
 
 def temporary_paths(root: Path, platform: str = "linux") -> AgentPaths:
@@ -57,6 +59,8 @@ class PathAndConfigTests(unittest.TestCase):
     def test_config_precedence_cli_environment_file_default(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             paths = temporary_paths(Path(directory))
+            default_config = AgentConfig.from_sources(paths, environ={})
+            self.assertEqual(default_config.core_ws_url, "ws://127.0.0.1:8000/ws/agents")
             write_config_file(paths.config_path, "ws://file:8000/ws/agents", "File Device")
             file_config = AgentConfig.from_sources(paths, environ={})
             self.assertEqual(file_config.core_ws_url, "ws://file:8000/ws/agents")
@@ -85,6 +89,8 @@ class PathAndConfigTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
                     validate_core_url(value)
+        with self.assertRaisesRegex(ValueError, "printable"):
+            write_config_file(Path("unused.toml"), "ws://core/ws/agents", "bad\nname")
 
     def test_legacy_identity_is_copied_verified_and_not_destroyed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -122,6 +128,40 @@ class SingleInstanceTests(unittest.TestCase):
             self.assertTrue(second.acquire())
             second.release()
             self.assertFalse(is_instance_running(path))
+
+
+class RuntimeResilienceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_core_outage_retries_without_terminating_the_agent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stop = asyncio.Event()
+            attempts = 0
+
+            async def connection(*_: object, **__: object) -> None:
+                nonlocal attempts
+                attempts += 1
+                if attempts == 1:
+                    raise OSError("Core is offline")
+                stop.set()
+
+            config = AgentConfig(
+                core_ws_url="ws://127.0.0.1:8000/ws/agents",
+                telemetry_interval=0.01,
+                reconnect_delay=0.01,
+                identity_path=root / "agent-id",
+                key_path=root / "agent-key.pem",
+            )
+            with patch("olympus_agent_common.runtime.run_connection", connection):
+                await asyncio.wait_for(run_forever(
+                    config,
+                    "test",
+                    "linux",
+                    "test",
+                    "0.13.0",
+                    lambda: {},
+                    stop=stop,
+                ), timeout=1)
+            self.assertEqual(attempts, 2)
 
 
 class AutostartTests(unittest.TestCase):
@@ -188,6 +228,14 @@ class LoggingAndCliTests(unittest.TestCase):
             self.assertNotIn("thisIsASecret", content)
             handler = logging.getLogger().handlers[0]
             self.assertEqual(handler.backupCount, 5)
+
+    def test_foreground_logging_uses_the_console_without_a_log_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertIsNone(configure_logging(False, Path(directory)))
+            handler = logging.getLogger().handlers[0]
+            self.assertIsInstance(handler, logging.StreamHandler)
+            self.assertFalse(hasattr(handler, "backupCount"))
+            self.assertFalse(Path(directory, "agent.log").exists())
 
     def test_headless_setup_and_version_cli(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

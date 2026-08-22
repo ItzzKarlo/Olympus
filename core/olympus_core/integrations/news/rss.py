@@ -16,7 +16,7 @@ class RssNewsProvider:
         self._client = client or httpx.AsyncClient(
             timeout=httpx.Timeout(12.0),
             follow_redirects=True,
-            headers={"User-Agent": "Olympus/0.12 (+local ambient display)"},
+            headers={"User-Agent": "Olympus/0.13 (+local ambient display)"},
         )
         self._owns_client = client is None
         self._validators: dict[str, tuple[str | None, str | None]] = {}

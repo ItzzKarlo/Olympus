@@ -7,9 +7,11 @@ import platform
 import plistlib
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
+import time
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -146,12 +148,47 @@ def smoke_test(artifact: Path) -> None:
             "XDG_CONFIG_HOME": str(home / ".config"),
             "XDG_STATE_HOME": str(home / ".local" / "state"),
         }
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            environment["OLYMPUS_INTEGRATION_PORT"] = str(listener.getsockname()[1])
         version_result = subprocess.run(
             [str(executable), "--version"], env=environment,
             capture_output=True, text=True, check=True,
         )
         if version() not in version_result.stdout:
             raise RuntimeError("Frozen Agent reported the wrong version")
+        subprocess.run([
+            str(executable), "setup",
+            "--core-url", "ws://127.0.0.1:9/ws/agents",
+            "--display-name", "Frozen smoke test",
+        ], env=environment, capture_output=True, text=True, check=True)
+        process = subprocess.Popen(
+            [str(executable), "run", "--background"],
+            env=environment,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        try:
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                status_result = subprocess.run(
+                    [str(executable), "status"], env=environment,
+                    capture_output=True, text=True, check=True,
+                )
+                if "Agent ID    missing" not in status_result.stdout:
+                    break
+                if process.poll() is not None:
+                    raise RuntimeError("Frozen Agent exited during identity smoke test")
+                time.sleep(0.25)
+            else:
+                raise RuntimeError("Frozen Agent did not create its identity in time")
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
         status_result = subprocess.run(
             [str(executable), "status"], env=environment,
             capture_output=True, text=True, check=True,
@@ -159,6 +196,10 @@ def smoke_test(artifact: Path) -> None:
         for expected in ("Configuration", "Identity", "Autostart", "Runtime"):
             if expected not in status_result.stdout:
                 raise RuntimeError(f"Frozen Agent status omitted {expected}")
+        if "Agent ID    missing" in status_result.stdout:
+            raise RuntimeError("Frozen Agent did not load its generated identity")
+        if str(home) not in status_result.stdout:
+            raise RuntimeError("Frozen Agent did not resolve its per-user configuration path")
 
 
 def archive(artifact: Path) -> tuple[Path, Path]:

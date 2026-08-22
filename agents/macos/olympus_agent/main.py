@@ -5,7 +5,6 @@ from olympus_agent.config import AgentConfig
 from olympus_agent.telemetry import collect_telemetry
 from olympus_agent_common.protocol import build_hello as common_build_hello
 from olympus_agent_common.protocol import validate_welcome
-from olympus_agent_common.runtime import run_agent
 from olympus_agent_common.runtime import run_connection as common_run_connection
 from olympus_agent_common.runtime import run_forever as common_run_forever
 from olympus_agent_common.cli import AgentApplication, run_cli

@@ -96,7 +96,7 @@ machine Agent:
 Minecraft + Fabric observer → localhost Agent → Core → Display
 ```
 
-Olympus v0.12 implements this full local path. Agents own device-specific
+Olympus v0.13 implements this full local path. Agents own device-specific
 observation, Core owns interpretation and monitoring, and the Display consumes
 only Core's normalized state.
 
@@ -779,7 +779,137 @@ conferencing data, attachments, and notes are neither requested nor exposed.
 Cancelled events are excluded; Google expands recurring instances. Calendar
 defaults to a seven-day lookahead and five-minute polling.
 
-## Run the macOS agent
+## Install the native Agent
+
+Olympus v0.13 packages the Agent as a self-contained, per-user application for
+Windows x86_64, macOS arm64, and Linux x86_64. Python is not required on the
+target machine. Core and Display remain source deployments in this milestone.
+
+The Agent deliberately runs inside the signed-in user's interactive session. It
+needs to observe foreground applications and gaming activity, so it is not a
+Windows service, macOS daemon, root process, or system-wide Linux service.
+
+Each release archive contains the native build produced on its matching operating
+system plus a `.sha256` checksum. Extract or copy it to a stable per-user path
+before installing autostart:
+
+- Windows: `%LOCALAPPDATA%\Programs\Olympus Agent\OlympusAgent.exe`
+- macOS: `~/Applications/Olympus Agent.app`
+- Linux: `~/.local/lib/olympus-agent/olympus-agent`
+
+The builds are currently unsigned. Windows SmartScreen or macOS Gatekeeper may
+therefore ask for confirmation on first launch. Olympus does not claim code
+signing, notarization, or an automatic updater in v0.13.
+The current macOS process-based activity detection does not require Accessibility
+permission, and the Agent does not request it.
+
+### First-time setup and enrollment
+
+Run commands with the installed executable. The examples below use
+`olympus-agent` as shorthand for that full platform-specific path.
+
+```bash
+olympus-agent setup --core-url ws://10.10.0.10:8000/ws/agents \
+  --display-name "Main PC"
+olympus-agent enroll
+olympus-agent install-autostart
+olympus-agent status
+```
+
+`setup` is interactive when either option is omitted and fully headless when both
+are supplied. `enroll` reads its one-use token with hidden input. Automation may
+instead supply `OLYMPUS_ENROLLMENT_TOKEN` for that process; the token is removed
+from the Agent process environment after use and is never written to configuration.
+Create the token locally on Core as described in
+[Trusted device enrollment](#trusted-device-enrollment).
+
+Configuration precedence is command-line option, environment variable, saved
+configuration, then built-in default. `OLYMPUS_CORE_URL` is the preferred Core
+override; the v0.12 `OLYMPUS_CORE_WS` name remains compatible. Use `wss://` when
+the network path is not already trusted and encrypted.
+
+`install-autostart` creates only a current-user startup definition:
+
+- Windows Scheduled Task with an interactive logon trigger
+- macOS LaunchAgent in `~/Library/LaunchAgents`
+- Linux `systemd --user` service enabled for the normal login session
+
+Linux does not enable lingering, so the Agent stops when the user's session ends.
+If `systemd --user` is unavailable, installation reports that fact and the Agent
+can still be started manually. Autostart installation and removal are idempotent;
+`uninstall-autostart` preserves configuration, device ID, and private key.
+
+### Local files
+
+| Platform | Configuration | Identity, key, lock, and logs |
+| --- | --- | --- |
+| Windows | `%APPDATA%\Olympus\agent.toml` | `%LOCALAPPDATA%\Olympus\` |
+| macOS | `~/Library/Application Support/Olympus/agent.toml` | `~/Library/Application Support/Olympus/` |
+| Linux | `${XDG_CONFIG_HOME:-~/.config}/olympus/agent.toml` | `${XDG_STATE_HOME:-~/.local/state}/olympus/` |
+
+Background logs are written to `logs/agent.log`, rotate at 3 MiB, and retain five
+older files. Enrollment credentials are redacted. `olympus-agent status` reports
+the configured Core and name, identity presence and public-key fingerprint,
+autostart state, and whether another Agent process owns the runtime lock. It never
+prints the private key or enrollment credential.
+
+When v0.13 first sees a v0.12 identity in the legacy location, it copies and
+verifies the ID and private key into the platform's current state directory. The
+original files remain in place, and an existing destination is never overwritten.
+That preserves the Core trust binding through the upgrade.
+
+### Updating or removing the Agent
+
+There is no in-place auto-updater. To update, stop the user startup entry, replace
+the installed application directory with the new same-platform archive, run
+`olympus-agent --version`, and install autostart again. Keep the configuration and
+state directories; they are intentionally separate from program files.
+
+To stop automatic startup without losing trust:
+
+```bash
+olympus-agent uninstall-autostart
+```
+
+For a complete reset, first revoke the device on Core, stop the Agent, remove the
+autostart entry, and only then delete the local configuration and state directories.
+Deleting the private key without revoking its old Core binding requires a fresh
+enrollment token.
+
+### Troubleshooting
+
+- Agent absent in Display: run `olympus-agent status`, confirm Core's URL, then
+  inspect `logs/agent.log`. Core outages do not terminate the Agent; it reconnects.
+- “Enrollment required”: create a new one-use Core token and run
+  `olympus-agent enroll` before starting the background process.
+- “Already running”: the per-user OS lock is working. Inspect `status` rather than
+  launching a second collector.
+- Autostart inactive: reinstall it while signed in as the intended user. On Linux,
+  confirm a working `systemd --user` session; manual startup remains supported.
+- Lost key: revoke the old Agent ID/key binding on Core, retain the permanent Agent
+  ID when possible, then enroll the regenerated key.
+- Missing GPU, temperature, FPS, or Minecraft detail: these inputs remain optional.
+  NVIDIA requires a compatible NVML stack, PresentMon CSV must be supplied
+  externally, and Minecraft detail requires the Fabric observer. Their absence
+  never prevents ordinary CPU/RAM/activity telemetry.
+
+### Build native release archives
+
+Build each artifact on the operating system and CPU architecture it targets;
+the build does not cross-compile. After installing that platform Agent's normal
+requirements:
+
+```bash
+python -m pip install -r agents/packaging/requirements.txt
+python scripts/build-agent.py --archive
+```
+
+The script creates an onedir application, checks `--version` and `status` from the
+frozen executable, then writes the native archive and checksum to `dist/releases`.
+The packaging workflow repeats the build on native Windows, macOS, and Linux CI
+runners and uploads the resulting archives; it does not publish a release.
+
+## Development: run the macOS agent
 
 ```bash
 cd agents/macos
@@ -789,11 +919,11 @@ pip install -r requirements.txt
 python -m olympus_agent.main
 ```
 
-The agent keeps its permanent random identity in `~/.olympus/agent-id` and its
-owner-readable Ed25519 key in `~/.olympus/agent-key.pem`. It keeps one WebSocket
-open, authenticates every connection, sends richer machine telemetry every two
-seconds, and reconnects when Core is unavailable. It reports development
-activity when a supported IDE process is running.
+The agent uses the current macOS configuration and state paths documented above,
+and safely imports an existing identity from the legacy `~/.olympus` directory.
+It keeps one WebSocket open, authenticates every connection, sends richer machine
+telemetry every two seconds, and reconnects when Core is unavailable. It reports
+development activity when a supported IDE process is running.
 
 For local development, the agent connects to localhost. When Core is running on
 Hermes on the home LAN, point it at Hermes explicitly:
@@ -813,7 +943,7 @@ Optional settings:
 - `OLYMPUS_INTEGRATION_STALE_SECONDS` — time before disconnected rich state
   expires (default `5`)
 
-## Run the Windows agent
+## Development: run the Windows agent
 
 In PowerShell:
 
@@ -834,7 +964,7 @@ Known games are matched against their actual client process rather than their
 launcher, then confirmed against the foreground window. A configurable grace
 period keeps the session stable during brief Alt-Tabs.
 
-## Run the Linux agent
+## Development: run the Linux agent
 
 ```bash
 cd agents/linux
@@ -965,7 +1095,7 @@ When the Display is not running on Hermes itself, configure the Core endpoint:
 VITE_OLYMPUS_CORE_WS=ws://10.10.0.10:8000/ws/display npm run dev
 ```
 
-For v0.12, the Display is a browser-based development UI. It is not yet packaged
+For v0.13, the Display is a browser-based development UI. It is not yet packaged
 or deployed as a kiosk.
 
 ## Test
@@ -974,7 +1104,10 @@ or deployed as a kiosk.
 cd core
 python -m unittest discover -s tests
 
-cd ../agents/macos
+cd ../agents/common
+python -m unittest discover -s tests
+
+cd ../macos
 python -m unittest discover -s tests
 
 cd ../windows
@@ -990,7 +1123,8 @@ cd ../integrations/minecraft-fabric
 gradle build
 ```
 
-The current milestone does not include Docker, kiosk packaging, application
+The current milestone packages only the native Agent. It does not include Core or
+Display packaging, Docker, kiosk deployment, automatic updates, application
 control, audio/RGB output, physical display control, or a Web administration
 surface. FPS remains an optional external Windows input, and unavailable metrics
 are omitted. macOS and Windows CPU temperature remain unavailable unless a
