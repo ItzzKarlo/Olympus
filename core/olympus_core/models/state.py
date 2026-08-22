@@ -21,6 +21,8 @@ from olympus_core.models.telemetry import (
     SystemTelemetry,
     TemperatureTelemetry,
 )
+from olympus_core.models.integrations import IntegrationObserver
+from olympus_core.models.minecraft import MinecraftState
 
 
 class MachineState(BaseModel):
@@ -38,10 +40,20 @@ class MachineState(BaseModel):
     activity: ActivityTelemetry | None
 
 
+class GamingIntegration(BaseModel):
+    type: str
+    available: bool
+    connected: bool
+    last_seen: datetime
+    observer: IntegrationObserver
+
+
 class GamingState(BaseModel):
     game: GameInfo
     session_started_at: datetime
     fps: float | None = None
+    integration: GamingIntegration | None = None
+    minecraft: MinecraftState | None = None
 
 
 class OlympusState(BaseModel):

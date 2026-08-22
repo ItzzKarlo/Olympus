@@ -6,6 +6,8 @@ from olympus_core.display.hub import DisplayHub
 from olympus_core.models.monitoring import EventSeverity
 from olympus_core.services.events import EventService
 from olympus_core.services.state import StateService
+from olympus_core.models.gameplay import GameplayEvent, GameplayEventSource
+from datetime import datetime, timezone
 
 
 class FakeWebSocket:
@@ -74,6 +76,23 @@ class DisplayHubTests(unittest.IsolatedAsyncioTestCase):
         await self.hub.disconnect(display)  # type: ignore[arg-type]
 
         self.assertEqual(self.hub.connection_count, 0)
+
+    async def test_gameplay_event_is_broadcast_as_transient_message(self) -> None:
+        display = FakeWebSocket()
+        await self.hub.connect(display, self.state)  # type: ignore[arg-type]
+        event = GameplayEvent(
+            id="event-1",
+            type="minecraft.player.healed",
+            timestamp=datetime.now(timezone.utc),
+            source=GameplayEventSource(agent_id="win", integration="minecraft"),
+            payload={"amount": 1},
+        )
+        await self.hub.broadcast_event(event)
+        self.assertEqual(display.messages[-1]["type"], "event")
+        self.assertEqual(
+            display.messages[-1]["event"]["type"],
+            "minecraft.player.healed",
+        )
 
 
 if __name__ == "__main__":

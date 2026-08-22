@@ -32,6 +32,7 @@ class AgentRegistry:
             temperatures=existing.temperatures if existing else None,
             gpu=existing.gpu if existing else None,
             activity=existing.activity if existing else None,
+            integrations=dict(existing.integrations) if existing else {},
         )
         self._agents[hello.agent_id] = agent
         self._connection_ids[hello.agent_id] = connection_id
@@ -55,6 +56,31 @@ class AgentRegistry:
         agent.temperatures = telemetry.temperatures
         agent.gpu = telemetry.gpu
         agent.activity = telemetry.activity
+        if telemetry.integrations is not None:
+            agent.integrations = dict(telemetry.integrations)
+        agent.last_seen = datetime.now(timezone.utc)
+        return agent
+
+    def update_integration(
+        self,
+        agent_id: str,
+        update: "AgentIntegrationState",
+        connection_id: str | None = None,
+    ) -> RegisteredAgent:
+        agent = self._agents.get(agent_id)
+        if agent is None:
+            raise KeyError(f"Unknown agent: {agent_id}")
+        if connection_id is not None and self._connection_ids.get(agent_id) != connection_id:
+            return agent
+        from olympus_core.models.integrations import IntegrationSnapshot
+
+        agent.integrations[update.integration] = IntegrationSnapshot(
+            available=update.available,
+            connected=True,
+            last_seen=update.observed_at,
+            observer=update.observer,
+            payload=update.payload,
+        )
         agent.last_seen = datetime.now(timezone.utc)
         return agent
 

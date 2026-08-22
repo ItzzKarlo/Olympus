@@ -3,6 +3,7 @@ import asyncio
 from starlette.websockets import WebSocket
 
 from olympus_core.models.state import DisplayState
+from olympus_core.models.gameplay import DisplayEventMessage, GameplayEvent
 
 
 class DisplayHub:
@@ -28,6 +29,13 @@ class DisplayHub:
 
     async def broadcast(self, state: DisplayState) -> None:
         payload = state.model_dump(mode="json")
+        await self._broadcast_payload(payload)
+
+    async def broadcast_event(self, event: GameplayEvent) -> None:
+        payload = DisplayEventMessage(event=event).model_dump(mode="json")
+        await self._broadcast_payload(payload)
+
+    async def _broadcast_payload(self, payload: dict[str, object]) -> None:
         async with self._send_lock:
             disconnected: list[WebSocket] = []
             for websocket in tuple(self._connections):

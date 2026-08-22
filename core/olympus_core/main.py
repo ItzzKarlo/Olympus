@@ -12,11 +12,13 @@ from olympus_core.monitoring.config import load_monitoring_config
 from olympus_core.monitoring.runtime import MonitoringRuntime
 from olympus_core.models.agent import RegisteredAgent
 from olympus_core.models.media import MediaState
+from olympus_core.models.gameplay import GameplayEvent
 from olympus_core.models.state import OlympusState
 from olympus_core.services.media import MediaStateStore
 from olympus_core.services.events import EventService
 from olympus_core.services.monitoring_store import MonitoringStore
 from olympus_core.services.state import StateService
+from olympus_core.services.gameplay import GameplayEventService
 from olympus_core.websocket.agents import handle_agent_socket
 from olympus_core.websocket.display import handle_display_socket
 
@@ -33,6 +35,7 @@ state_service = StateService(
     events=event_service,
 )
 display_hub = DisplayHub()
+gameplay_service = GameplayEventService()
 
 
 async def publish_display_state() -> None:
@@ -42,6 +45,10 @@ async def publish_display_state() -> None:
 async def update_media_state(media: MediaState) -> None:
     media_store.update(media)
     await publish_display_state()
+
+
+async def publish_gameplay_event(event: GameplayEvent) -> None:
+    await display_hub.broadcast_event(event)
 
 
 @asynccontextmanager
@@ -110,7 +117,13 @@ async def state() -> OlympusState:
 
 @app.websocket("/ws/agents")
 async def agent_socket(websocket: WebSocket) -> None:
-    await handle_agent_socket(websocket, registry, publish_display_state)
+    await handle_agent_socket(
+        websocket,
+        registry,
+        publish_display_state,
+        publish_gameplay_event,
+        gameplay_service,
+    )
 
 
 @app.websocket("/ws/display")

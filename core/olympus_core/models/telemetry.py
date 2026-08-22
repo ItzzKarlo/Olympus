@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from olympus_core.models.integrations import IntegrationSnapshot
+
 
 class ActivityMode(str, Enum):
     IDLE = "idle"
@@ -63,3 +65,4 @@ class AgentTelemetry(BaseModel):
     temperatures: TemperatureTelemetry | None = None
     gpu: GpuTelemetry | None = None
     activity: ActivityTelemetry
+    integrations: dict[str, IntegrationSnapshot] | None = None

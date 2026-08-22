@@ -11,6 +11,7 @@ from olympus_core.models.telemetry import (
     SystemTelemetry,
     TemperatureTelemetry,
 )
+from olympus_core.models.integrations import IntegrationSnapshot
 
 
 class AgentHello(BaseModel):
@@ -43,3 +44,4 @@ class RegisteredAgent(BaseModel):
     temperatures: TemperatureTelemetry | None = None
     gpu: GpuTelemetry | None = None
     activity: ActivityTelemetry | None = None
+    integrations: dict[str, IntegrationSnapshot] = Field(default_factory=dict)

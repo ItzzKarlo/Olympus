@@ -15,4 +15,6 @@ class AgentConfig(CommonAgentConfig):
             reconnect_delay=common.reconnect_delay,
             identity_path=common.identity_path,
             game_background_grace_seconds=common.game_background_grace_seconds,
+            integration_port=common.integration_port,
+            integration_stale_seconds=common.integration_stale_seconds,
         )
