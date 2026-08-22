@@ -10,7 +10,15 @@ import type {
 export const DEFAULT_CORE_WS = "ws://127.0.0.1:8000/ws/display";
 
 export function getCoreWebSocketUrl(): string {
-  return import.meta.env.VITE_OLYMPUS_CORE_WS?.trim() || DEFAULT_CORE_WS;
+  const override = import.meta.env.VITE_OLYMPUS_CORE_WS?.trim();
+  if (override) {
+    return override;
+  }
+  if (typeof window !== "undefined" && window.location.host) {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${window.location.host}/ws/display`;
+  }
+  return DEFAULT_CORE_WS;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

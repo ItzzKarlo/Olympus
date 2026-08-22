@@ -8,6 +8,7 @@ from fastapi import FastAPI, WebSocket
 from olympus_core.agents.registry import AgentRegistry
 from olympus_core.config import SpotifySettings, load_core_config
 from olympus_core.display.hub import DisplayHub
+from olympus_core.display.static import install_display_routes
 from olympus_core.integrations.spotify import SpotifyApi, SpotifyCollector
 from olympus_core.integrations.weather import OpenMeteoApi, WeatherCollector
 from olympus_core.integrations.calendar import CalendarCollector, GoogleCalendarApi
@@ -360,3 +361,6 @@ async def agent_socket(websocket: WebSocket) -> None:
 @app.websocket("/ws/display")
 async def display_socket(websocket: WebSocket) -> None:
     await handle_display_socket(websocket, display_hub, state_service)
+
+
+install_display_routes(app, core_settings.display.resolved_directory)

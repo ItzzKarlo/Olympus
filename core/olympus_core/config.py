@@ -212,6 +212,31 @@ class PersistenceSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class ServerSettings:
+    host: str = "127.0.0.1"
+    port: int = 8_000
+
+
+@dataclass(frozen=True, slots=True)
+class DisplaySettings:
+    directory: Path | None = None
+
+    @property
+    def resolved_directory(self) -> Path | None:
+        return self.directory.expanduser().resolve() if self.directory is not None else None
+
+
+@dataclass(frozen=True, slots=True)
+class BackupSettings:
+    directory: Path = Path("~/.local/share/olympus/backups")
+    retention_days: int = 14
+
+    @property
+    def resolved_directory(self) -> Path:
+        return self.directory.expanduser()
+
+
+@dataclass(frozen=True, slots=True)
 class SecuritySettings:
     require_agent_auth: bool = True
     enrollment_token_ttl_minutes: int = 10
@@ -223,6 +248,9 @@ class SecuritySettings:
 @dataclass(frozen=True, slots=True)
 class CoreSettings:
     timezone: str = DEFAULT_TIMEZONE
+    server: ServerSettings = ServerSettings()
+    display: DisplaySettings = DisplaySettings()
+    backup: BackupSettings = BackupSettings()
     weather: WeatherSettings = WeatherSettings()
     calendar: CalendarSettings = CalendarSettings()
     night: NightSettings = NightSettings()
@@ -307,6 +335,9 @@ def _weekend_days(value: Any) -> tuple[int, ...]:
 
 def parse_core_config(data: dict[str, Any]) -> CoreSettings:
     olympus = _mapping(data.get("olympus"))
+    server_data = _mapping(data.get("server"))
+    display_data = _mapping(data.get("display"))
+    backup_data = _mapping(data.get("backup"))
     timezone = _timezone(olympus.get("timezone"))
     weather_data = _mapping(data.get("weather"))
     calendar_data = _mapping(data.get("calendar"))
@@ -371,6 +402,21 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
 
     return CoreSettings(
         timezone=timezone,
+        server=ServerSettings(
+            host=str(server_data.get("host", "127.0.0.1")).strip() or "127.0.0.1",
+            port=min(_positive_int(server_data.get("port"), 8_000), 65_535),
+        ),
+        display=DisplaySettings(directory=(
+            Path(str(display_data["directory"]))
+            if display_data.get("directory")
+            else None
+        )),
+        backup=BackupSettings(
+            directory=Path(str(
+                backup_data.get("directory", "~/.local/share/olympus/backups")
+            )),
+            retention_days=min(_positive_int(backup_data.get("retention_days"), 14), 365),
+        ),
         weather=WeatherSettings(
             enabled=bool(weather_data.get("enabled", False)),
             latitude=_coordinate(weather_data.get("latitude"), -90, 90),

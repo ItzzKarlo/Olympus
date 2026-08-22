@@ -78,6 +78,14 @@ body {
   overflow-x: hidden;
 }
 
+html.olympus-kiosk,
+html.olympus-kiosk body {
+  cursor: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
 button,
 input,
 textarea,

@@ -5,11 +5,24 @@ core_host_poll_seconds = 5
 # IANA timezone used by the room display and calendar interpretation.
 timezone = "Europe/Berlin"
 
+[server]
+# Development bind. Production Hermes uses 0.0.0.0 so trusted LAN Agents can connect.
+host = "127.0.0.1"
+port = 8000
+
+[display]
+# Optional Vite production output. When present, Core serves it at the same origin.
+directory = "../display/dist"
+
 [persistence]
 # Development default. Hermes may use /var/lib/olympus/core.db later.
 database_path = "~/.local/share/olympus/core.db"
 incident_retention_days = 30
 news_memory_retention_days = 7
+
+[backup]
+directory = "~/.local/share/olympus/backups"
+retention_days = 14
 
 [security]
 # Secure by default. Disable only for isolated legacy development.

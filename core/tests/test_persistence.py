@@ -207,6 +207,18 @@ class PersistenceTests(unittest.TestCase):
         self.assertTrue(configured.persistence.resolved_database_path.is_absolute())
         self.assertEqual(configured.security.auth_timeout_seconds, 1.0)
 
+    def test_production_server_display_and_backup_paths_parse(self) -> None:
+        configured = parse_core_config({
+            "server": {"host": "0.0.0.0", "port": 9000},
+            "display": {"directory": "~/olympus-display"},
+            "backup": {"directory": "~/olympus-backups", "retention_days": 10},
+        })
+        self.assertEqual(configured.server.host, "0.0.0.0")
+        self.assertEqual(configured.server.port, 9000)
+        self.assertTrue(configured.display.resolved_directory.is_absolute())
+        self.assertTrue(configured.backup.resolved_directory.is_absolute())
+        self.assertEqual(configured.backup.retention_days, 10)
+
 
 if __name__ == "__main__":
     unittest.main()

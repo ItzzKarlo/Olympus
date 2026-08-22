@@ -1,10 +1,14 @@
 import argparse
 from datetime import datetime
+from pathlib import Path
+import sqlite3
+import sys
 
 from olympus_core.config import load_core_config
 from olympus_core.persistence.database import Database
 from olympus_core.persistence.devices import DeviceRepository
 from olympus_core.persistence.enrollment import EnrollmentRepository
+from olympus_core.persistence.backup import create_backup, prune_backups
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -20,6 +24,9 @@ def _parser() -> argparse.ArgumentParser:
     device_commands.add_parser("list")
     revoke = device_commands.add_parser("revoke")
     revoke.add_argument("agent_id")
+    backup = groups.add_parser("backup")
+    backup.add_argument("--destination", type=Path)
+    backup.add_argument("--retention-days", type=int)
     return parser
 
 
@@ -30,6 +37,25 @@ def _short_time(value: datetime | None) -> str:
 def main() -> int:
     args = _parser().parse_args()
     settings = load_core_config()
+    if args.group == "backup":
+        destination = args.destination or settings.backup.resolved_directory
+        retention = (
+            args.retention_days
+            if args.retention_days is not None
+            else settings.backup.retention_days
+        )
+        try:
+            created = create_backup(
+                settings.persistence.resolved_database_path,
+                destination,
+            )
+            removed = prune_backups(destination, retention)
+        except (OSError, sqlite3.Error, ValueError) as error:
+            print(f"Olympus backup failed: {error}", file=sys.stderr)
+            return 1
+        print(f"Created safe SQLite backup: {created}")
+        print(f"Retention cleanup removed {len(removed)} expired backup(s).")
+        return 0
     database = Database(settings.persistence.resolved_database_path)
     database.initialize()
     devices = DeviceRepository(database)
