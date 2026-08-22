@@ -1,0 +1,23 @@
+[Unit]
+Description=Thresholded local Olympus Core healthcheck
+After=olympus-core.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/olympus/current/core
+RuntimeDirectory=olympus
+RuntimeDirectoryMode=0700
+Environment=OLYMPUS_CONFIG=/etc/olympus/config.toml
+ExecStart=/opt/olympus/current/core/.venv/bin/python -m olympus_core.healthcheck --state /run/olympus/health-failures --threshold 3 --timeout 3
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectClock=true
+LockPersonality=true
+ReadWritePaths=/run/olympus

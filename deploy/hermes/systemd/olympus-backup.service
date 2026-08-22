@@ -1,0 +1,24 @@
+[Unit]
+Description=Safe Olympus SQLite backup
+After=olympus-core.service
+
+[Service]
+Type=oneshot
+User=olympus
+Group=olympus
+WorkingDirectory=/opt/olympus/current/core
+Environment=OLYMPUS_CONFIG=/etc/olympus/config.toml
+EnvironmentFile=-/etc/olympus/secrets.env
+ExecStart=/opt/olympus/current/core/.venv/bin/python -m olympus_core.admin backup
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+ReadWritePaths=/var/lib/olympus /var/backups/olympus

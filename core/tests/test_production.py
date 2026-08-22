@@ -4,13 +4,13 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
 
 from olympus_core.display.static import install_display_routes
-from olympus_core.healthcheck import HealthWatchdog
+from olympus_core.healthcheck import HealthWatchdog, main as healthcheck_main
 from olympus_core.persistence.backup import create_backup, prune_backups
 from olympus_core.persistence.database import Database
 
@@ -128,6 +128,22 @@ class HealthWatchdogTests(unittest.TestCase):
             state = Path(directory) / "health-failures"
             state.write_text("broken", encoding="ascii")
             self.assertEqual(HealthWatchdog(state, 3, Mock()).record(False), (1, False))
+
+    def test_deliberately_stopped_core_is_never_restarted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "health-failures"
+            state.write_text("2\n", encoding="ascii")
+            with (
+                patch("olympus_core.healthcheck.core_service_active", return_value=False),
+                patch("olympus_core.healthcheck.restart_core") as restart,
+            ):
+                self.assertEqual(healthcheck_main([
+                    "--url", "http://127.0.0.1:9/health",
+                    "--state", str(state),
+                    "--threshold", "3",
+                ]), 0)
+            restart.assert_not_called()
+            self.assertEqual(state.read_text(encoding="ascii"), "0\n")
 
 
 if __name__ == "__main__":

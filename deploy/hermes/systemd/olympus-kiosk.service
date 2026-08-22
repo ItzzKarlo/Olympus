@@ -1,0 +1,44 @@
+[Unit]
+Description=Olympus Cage/Chromium kiosk on tty1
+Wants=olympus-core.service dbus.socket systemd-logind.service
+After=olympus-core.service systemd-user-sessions.service dbus.socket systemd-logind.service
+Conflicts=getty@tty1.service
+After=getty@tty1.service
+ConditionPathExists=/dev/tty1
+
+[Service]
+Type=simple
+User=olympus-display
+PAMName=olympus-kiosk
+UtmpIdentifier=tty1
+UtmpMode=user
+TTYPath=/dev/tty1
+TTYReset=true
+TTYVHangup=true
+TTYVTDisallocate=true
+StandardInput=tty-fail
+Environment=WLR_LIBINPUT_NO_DEVICES=1
+EnvironmentFile=-/etc/olympus/kiosk.env
+ExecStart=/opt/olympus/current/scripts/hermes/start-kiosk.sh
+Restart=always
+RestartSec=10s
+TimeoutStopSec=20s
+KillMode=mixed
+UMask=0077
+
+# Keep Chromium's normal sandbox available; do not add NoNewPrivileges here.
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+LockPersonality=true
+ReadWritePaths=/home/olympus-display
+CPUWeight=50
+IOWeight=50
+OOMScoreAdjust=200
+
+[Install]
+WantedBy=multi-user.target

@@ -66,6 +66,13 @@ def restart_core() -> None:
     )
 
 
+def core_service_active() -> bool:
+    return subprocess.run(
+        ["systemctl", "is-active", "--quiet", "olympus-core.service"],
+        check=False,
+    ).returncode == 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Thresholded local Olympus Core watchdog")
     parser.add_argument("--url")
@@ -76,6 +83,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         url = args.url or f"http://127.0.0.1:{load_core_config().server.port}/health"
         watchdog = HealthWatchdog(args.state, args.threshold, restart_core)
+        if not core_service_active():
+            watchdog.record(True)
+            print("Olympus Core is deliberately inactive; watchdog took no action.")
+            return 0
         failures, restarted = watchdog.record(core_is_healthy(url, args.timeout))
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         print(f"Olympus healthcheck failed: {error}")

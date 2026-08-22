@@ -1,0 +1,69 @@
+#!/bin/sh
+set -u
+
+ROOT=${OLYMPUS_ROOT:-}
+SYSTEMCTL=${OLYMPUS_SYSTEMCTL:-systemctl}
+CORE_URL=${OLYMPUS_CORE_URL:-http://127.0.0.1:8000}
+failures=0
+
+check_file() {
+    label=$1
+    path=$2
+    if [ -f "$ROOT$path" ]; then
+        echo "PASS  $label: $path"
+    else
+        echo "FAIL  $label missing: $path"
+        failures=$((failures + 1))
+    fi
+}
+
+check_file "production config" /etc/olympus/config.toml
+check_file "Core database" /var/lib/olympus/core.db
+check_file "Display entrypoint" /opt/olympus/current/display/index.html
+check_file "Core unit" /etc/systemd/system/olympus-core.service
+check_file "backup timer" /etc/systemd/system/olympus-backup.timer
+check_file "health timer" /etc/systemd/system/olympus-healthcheck.timer
+
+if [ -r "$ROOT/var/lib/olympus/core.db" ]; then
+    echo "PASS  Core database readable"
+else
+    echo "FAIL  Core database is not readable"
+    failures=$((failures + 1))
+fi
+if [ -w "$ROOT/var/lib/olympus" ]; then
+    echo "PASS  Core state directory writable by current diagnostic user"
+else
+    echo "WARN  Core state directory is not writable by current diagnostic user"
+fi
+
+if [ -z "$ROOT" ]; then
+    if "$SYSTEMCTL" is-active --quiet olympus-core.service; then
+        echo "PASS  olympus-core.service active"
+    else
+        echo "FAIL  olympus-core.service inactive"
+        failures=$((failures + 1))
+    fi
+    if curl --fail --silent --max-time 3 "$CORE_URL/health" >/dev/null; then
+        echo "PASS  local /health reachable"
+    else
+        echo "FAIL  local /health unavailable"
+        failures=$((failures + 1))
+    fi
+    "$SYSTEMCTL" is-enabled --quiet olympus-backup.timer && echo "PASS  backup timer enabled" || echo "WARN  backup timer disabled"
+    "$SYSTEMCTL" is-enabled --quiet olympus-healthcheck.timer && echo "PASS  health timer enabled" || echo "WARN  health timer disabled"
+    "$SYSTEMCTL" is-enabled --quiet olympus-kiosk.service && echo "INFO  kiosk enabled" || echo "INFO  kiosk disabled"
+else
+    echo "INFO  rooted filesystem inspection; live service probes skipped"
+fi
+
+for command in cage chromium chromium-browser; do
+    command -v "$command" >/dev/null 2>&1 && echo "PASS  command available: $command"
+done
+[ -e "$ROOT/dev/dri/card0" ] && echo "PASS  DRM card present" || echo "INFO  no DRM card currently visible"
+df -Pk "${ROOT:-/}" | awk 'NR == 2 {print "INFO  disk free: " $4 " KiB"}'
+
+if [ "$failures" -gt 0 ]; then
+    echo "Olympus doctor found $failures required check failure(s)."
+    exit 1
+fi
+echo "Olympus doctor found no required local deployment failures."

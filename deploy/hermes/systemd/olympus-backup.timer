@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Olympus SQLite backup
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=30m
+Unit=olympus-backup.service
+
+[Install]
+WantedBy=timers.target

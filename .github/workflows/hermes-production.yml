@@ -1,0 +1,53 @@
+name: Verify Hermes production release
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "core/**"
+      - "display/**"
+      - "deploy/hermes/**"
+      - "scripts/hermes/**"
+      - ".github/workflows/hermes-production.yml"
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: display/package-lock.json
+      - name: Install Core dependencies
+        run: python -m pip install -r core/requirements.txt
+      - name: Test Core and Hermes deployment behavior
+        working-directory: core
+        run: python -m unittest discover -s tests
+      - name: Install and build production Display
+        working-directory: display
+        env:
+          VITE_OLYMPUS_KIOSK: "true"
+        run: |
+          npm ci
+          npm run build
+      - name: Check Hermes shell syntax
+        run: for script in scripts/hermes/*.sh; do sh -n "$script"; done
+      - name: Build transferable Hermes release
+        run: scripts/hermes/build-release.sh --skip-node-install
+      - name: Reject development or private state in release
+        run: |
+          if tar -tzf dist/hermes/olympus-*-hermes-arm64.tar.gz | grep -E '(^|/)(\.venv|node_modules|\.env|[^/]*\.(db|pyc))(/|$)'; then
+            echo "Release contains development or private runtime state" >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: olympus-hermes-arm64
+          path: dist/hermes/*
+          if-no-files-found: error

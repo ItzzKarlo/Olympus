@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic Olympus Core healthcheck
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=1m
+AccuracySec=10s
+Unit=olympus-healthcheck.service
+
+[Install]
+WantedBy=timers.target

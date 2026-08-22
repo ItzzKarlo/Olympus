@@ -1,0 +1,152 @@
+# Olympus v0.14 production template for Hermes. Contains no credentials.
+core_host_poll_seconds = 5
+
+[olympus]
+timezone = "Europe/Berlin"
+
+[server]
+# Trusted LAN Agents need Core reachable; the kiosk itself always uses loopback.
+host = "0.0.0.0"
+port = 8000
+
+[display]
+directory = "/opt/olympus/current/display"
+
+[persistence]
+database_path = "/var/lib/olympus/core.db"
+incident_retention_days = 30
+news_memory_retention_days = 7
+
+[backup]
+directory = "/var/backups/olympus"
+retention_days = 14
+
+[security]
+require_agent_auth = true
+enrollment_token_ttl_minutes = 10
+auth_timeout_seconds = 10
+revocation_refresh_seconds = 30
+last_seen_write_seconds = 60
+
+[night]
+enabled = true
+weekday_start = "22:00"
+weekend_start = "00:00"
+end = "07:30"
+weekend_days = ["friday", "saturday"]
+
+[football]
+enabled = false
+provider = "api-football"
+team_id = "157"
+tracked_id = "bayern"
+team_name = "FC Bayern München"
+team_short_name = "Bayern"
+team_code = "FCB"
+timezone = "Europe/Berlin"
+poll_upcoming_minutes = 30
+poll_near_match_minutes = 5
+poll_pre_match_seconds = 60
+poll_live_seconds = 15
+poll_half_time_seconds = 30
+poll_post_match_seconds = 60
+poll_team_stats_seconds = 60
+poll_player_stats_seconds = 60
+live_stale_seconds = 60
+unavailable_seconds = 900
+low_quota_remaining = 25
+critical_quota_remaining = 5
+max_history_samples = 96
+
+[football.matchday]
+pre_match_minutes = 60
+post_match_minutes = 20
+
+[football.players]
+watched = []
+rating_change_threshold = 0.25
+
+[news]
+enabled = false
+provider = "rss"
+poll_minutes = 5
+retention_hours = 48
+stale_minutes = 15
+unavailable_minutes = 60
+default_language = "en"
+local_regions = ["DE"]
+
+[news.presentation]
+ambient_limit = 3
+news_scene_seconds = 20
+major_scene_seconds = 45
+cooldown_minutes = 30
+notable_threshold = 0.55
+important_threshold = 0.68
+major_threshold = 0.86
+
+[news.interests]
+technology = 1.1
+germany = 1.2
+world = 1.0
+entertainment = 0.7
+
+# Add explicit trusted feeds when News is enabled.
+# [[news.feeds]]
+# id = "publisher-world"
+# name = "Publisher World"
+# url = "https://example.com/world.xml"
+# language = "en"
+# region = "DE"
+# topic = "world"
+# trust = 1.0
+
+[weather]
+enabled = false
+latitude = 48.137
+longitude = 11.575
+timezone = "Europe/Berlin"
+location_name = "Home"
+poll_minutes = 10
+
+[calendar]
+enabled = false
+provider = "google"
+timezone = "Europe/Berlin"
+lookahead_days = 7
+poll_minutes = 5
+calendar_ids = ["primary"]
+
+[network]
+enabled = true
+poll_seconds = 5
+timeout_seconds = 2
+gateway = "auto"
+gateway_port = 53
+internet_host = "1.1.1.1"
+internet_port = 443
+dns_hostname = "example.com"
+https_url = "https://www.cloudflare.com/cdn-cgi/trace"
+failure_threshold = 3
+recovery_threshold = 2
+
+# [[network.targets]]
+# id = "nas"
+# name = "Home NAS"
+# host = "10.10.0.20"
+# port = 443
+# alert = true
+
+[service_monitoring]
+poll_seconds = 10
+timeout_seconds = 3
+failure_threshold = 3
+recovery_threshold = 2
+
+# [[services]]
+# id = "minecraft"
+# name = "Minecraft"
+# type = "tcp"
+# host = "10.10.0.10"
+# port = 25565
+# severity = "warning"

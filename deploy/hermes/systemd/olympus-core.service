@@ -1,0 +1,39 @@
+[Unit]
+Description=Olympus Core
+After=network.target
+
+[Service]
+Type=simple
+User=olympus
+Group=olympus
+WorkingDirectory=/opt/olympus/current/core
+Environment=OLYMPUS_CONFIG=/etc/olympus/config.toml
+EnvironmentFile=-/etc/olympus/secrets.env
+ExecStart=/opt/olympus/current/core/.venv/bin/python -m olympus_core.serve
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectClock=true
+LockPersonality=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/olympus /var/backups/olympus
+
+# Olympus is one workload on shared Hermes infrastructure.
+CPUWeight=80
+IOWeight=80
+
+[Install]
+WantedBy=multi-user.target
