@@ -7,6 +7,7 @@ from olympus_core.services.events import EventService
 from olympus_core.services.gaming import GamingSessionService
 from olympus_core.services.mode_resolver import ModeResolver
 from olympus_core.services.monitoring_store import MonitoringStore
+from olympus_core.services.ambient import WeatherStateStore
 
 
 class StateService:
@@ -20,6 +21,8 @@ class StateService:
         monitoring: MonitoringStore | None = None,
         events: EventService | None = None,
         gaming: GamingSessionService | None = None,
+        timezone: str = "UTC",
+        weather: WeatherStateStore | None = None,
     ) -> None:
         self._registry = registry
         self._media = media or MediaStateStore()
@@ -27,6 +30,8 @@ class StateService:
         self._monitoring = monitoring or MonitoringStore()
         self._events = events or EventService()
         self._gaming = gaming or GamingSessionService()
+        self._timezone = timezone
+        self._weather = weather or WeatherStateStore()
 
     def current(self) -> OlympusState:
         agents = self._registry.get_all()
@@ -37,6 +42,8 @@ class StateService:
         return OlympusState(
             mode=resolution.mode,
             active_device=resolution.active_device,
+            timezone=self._timezone,
+            weather=self._weather.get(),
             machines={
                 agent.agent_id: MachineState(
                     agent_id=agent.agent_id,
