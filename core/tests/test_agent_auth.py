@@ -1,4 +1,5 @@
 from pathlib import Path
+import asyncio
 import tempfile
 import unittest
 
@@ -152,6 +153,45 @@ class AgentAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         await self.run_socket(socket)
         self.assertEqual(socket.sent[0]["type"], "enrollment_required")
         self.assertIsNone(self.registry.get("agent"))
+
+    async def test_authentication_disabled_preserves_explicit_development_flow(self) -> None:
+        self.security = SecuritySettings(require_agent_auth=False)
+        socket = FakeWebSocket([{
+            "type": "hello",
+            "agent_id": "legacy",
+            "hostname": "Legacy",
+            "platform": "linux",
+            "platform_version": "1",
+            "agent_version": "0.11.0",
+        }])
+        await self.run_socket(socket)
+        self.assertEqual(socket.sent[0]["type"], "welcome")
+        self.assertIsNotNone(self.registry.get("legacy"))
+
+    async def test_active_revocation_closes_connection_within_refresh(self) -> None:
+        key = Ed25519PrivateKey.generate()
+        await self.enroll("agent", key)
+        self.registry = AgentRegistry()
+        self.security = SecuritySettings(
+            auth_timeout_seconds=1,
+            revocation_refresh_seconds=0.02,
+            last_seen_write_seconds=5,
+        )
+        socket = FakeWebSocket([hello("agent", key)], signer=key)
+        original_receive = socket.receive_json
+
+        async def receive() -> object:
+            if socket.signer is None and socket.sent and socket.sent[-1].get("type") == "welcome":
+                await asyncio.sleep(60)
+            return await original_receive()
+
+        socket.receive_json = receive  # type: ignore[method-assign]
+        task = asyncio.create_task(self.run_socket(socket))
+        while not socket.sent or socket.sent[-1].get("type") != "welcome":
+            await asyncio.sleep(0)
+        self.devices.revoke("agent")
+        await asyncio.wait_for(task, 1)
+        self.assertEqual(socket.close_reason, "Device trust revoked")
 
 
 if __name__ == "__main__":

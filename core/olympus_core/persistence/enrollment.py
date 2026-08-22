@@ -120,3 +120,14 @@ class EnrollmentRepository:
                 connection.rollback()
                 raise
         return _device(row)
+
+    def cleanup(self, now: datetime | None = None) -> int:
+        observed_at = now or datetime.now(timezone.utc)
+        with self._database.connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM enrollment_tokens "
+                "WHERE expires_at < ? OR used_at IS NOT NULL",
+                (observed_at.isoformat(),),
+            )
+            connection.commit()
+        return cursor.rowcount

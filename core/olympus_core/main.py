@@ -26,6 +26,8 @@ from olympus_core.models.state import OlympusState
 from olympus_core.persistence.database import Database
 from olympus_core.persistence.devices import DeviceRepository
 from olympus_core.persistence.enrollment import EnrollmentRepository
+from olympus_core.persistence.incidents import IncidentRepository
+from olympus_core.persistence.news_memory import NewsMemoryRepository
 from olympus_core.services.media import MediaStateStore
 from olympus_core.services.events import EventService
 from olympus_core.services.monitoring_store import MonitoringStore
@@ -47,6 +49,8 @@ device_repository = DeviceRepository(database)
 enrollment_repository = EnrollmentRepository(
     database, core_settings.security.enrollment_token_ttl_minutes
 )
+incident_repository = IncidentRepository(database)
+news_memory_repository = NewsMemoryRepository(database)
 media_store = MediaStateStore()
 weather_store = WeatherStateStore()
 calendar_store = CalendarStateStore(core_settings.timezone)
@@ -54,7 +58,7 @@ football_store = FootballStateStore()
 news_store = NewsStateStore()
 time_policy_service = TimePolicyService(core_settings.night, core_settings.timezone)
 monitoring_store = MonitoringStore()
-event_service = EventService()
+event_service = EventService(incidents=incident_repository)
 state_service = StateService(
     registry,
     media_store,
@@ -133,14 +137,45 @@ async def publish_news_event(event: NewsDisplayEvent) -> None:
     await display_hub.broadcast_event(event)
 
 
+async def persistence_maintenance() -> None:
+    while True:
+        await asyncio.sleep(21_600)
+        try:
+            enrollment_repository.cleanup()
+            incident_repository.cleanup(core_settings.persistence.incident_retention_days)
+            news_memory_repository.cleanup(core_settings.persistence.news_memory_retention_days)
+        except Exception as error:
+            logger.warning("Persistence retention cleanup failed: %s", error)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     database.initialize()
     logger.info("Core persistence initialized")
     if not core_settings.security.require_agent_auth:
         logger.warning("Agent authentication is DISABLED. Use only for local development.")
+    monitoring_config = load_monitoring_config()
+    active_incident_keys: set[str] = {
+        f"service:{service.id}" for service in monitoring_config.services
+    }
+    if monitoring_config.network.enabled:
+        active_incident_keys.update({
+            "network:gateway", "network:internet", "network:dns", "network:https"
+        })
+        active_incident_keys.update(
+            f"network:target:{target.id}"
+            for target in monitoring_config.network.targets
+            if target.alert
+        )
+    event_service.restore(active_incident_keys)
+    enrollment_repository.cleanup()
+    incident_repository.cleanup(core_settings.persistence.incident_retention_days)
+    news_memory_repository.cleanup(core_settings.persistence.news_memory_retention_days)
+    maintenance_task = asyncio.create_task(
+        persistence_maintenance(), name="persistence-maintenance"
+    )
     monitoring = MonitoringRuntime(
-        load_monitoring_config(),
+        monitoring_config,
         monitoring_store,
         event_service,
         publish_display_state,
@@ -241,6 +276,8 @@ async def lifespan(_app: FastAPI):
             news_provider,
             update_news_state,
             publish_news_event,
+            news_memory_repository,
+            core_settings.persistence.news_memory_retention_days,
         )
         news_task = asyncio.create_task(news_collector.run(), name="news-collector")
     elif core_settings.news.enabled:
@@ -273,6 +310,8 @@ async def lifespan(_app: FastAPI):
             news_collector.stop()
             await news_task
         await monitoring.stop()
+        maintenance_task.cancel()
+        await asyncio.gather(maintenance_task, return_exceptions=True)
         database.close()
 
 

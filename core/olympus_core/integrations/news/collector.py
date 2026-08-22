@@ -1,7 +1,9 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
 import inspect
+import logging
 from uuid import uuid4
 
 from olympus_core.config import NewsSettings
@@ -14,6 +16,8 @@ from olympus_core.models.news import (
     NewsPresentation,
     NewsState,
 )
+from olympus_core.integrations.news.normalization import normalize_headline
+from olympus_core.persistence.news_memory import NewsMemoryRepository
 
 
 LEVEL_RANK = {
@@ -22,6 +26,13 @@ LEVEL_RANK = {
     NewsImportanceLevel.IMPORTANT: 2,
     NewsImportanceLevel.MAJOR: 3,
 }
+logger = logging.getLogger(__name__)
+
+
+def cluster_fingerprint(cluster: NewsCluster) -> str:
+    tokens = sorted(set(normalize_headline(cluster.headline).split()))
+    identity = f"{cluster.topic.value}\0{' '.join(tokens)}"
+    return sha256(identity.encode("utf-8")).hexdigest()
 
 
 class NewsCollector:
@@ -31,6 +42,8 @@ class NewsCollector:
         provider: NewsProvider,
         on_update: Callable[[NewsState], Awaitable[None] | None],
         on_event: Callable[[NewsDisplayEvent], Awaitable[None] | None],
+        memory: NewsMemoryRepository | None = None,
+        memory_retention_days: int = 7,
     ) -> None:
         self._settings = settings
         self._provider = provider
@@ -41,6 +54,12 @@ class NewsCollector:
         self._baseline_established = False
         self._known_levels: dict[str, NewsImportanceLevel] = {}
         self._presented: dict[str, tuple[NewsImportanceLevel, datetime]] = {}
+        self._memory = memory
+        if memory is not None:
+            self._presented = {
+                fingerprint: (NewsImportanceLevel(item.highest_level), item.last_presented_at)
+                for fingerprint, item in memory.load(memory_retention_days).items()
+            }
         self._expiry_task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
         self._lock = asyncio.Lock()
@@ -80,7 +99,7 @@ class NewsCollector:
             level = cluster.importance.level
             if LEVEL_RANK[level] < LEVEL_RANK[NewsImportanceLevel.IMPORTANT]:
                 continue
-            presented = self._presented.get(cluster.id)
+            presented = self._presented.get(cluster_fingerprint(cluster))
             if presented is not None:
                 prior_level, prior_at = presented
                 in_cooldown = now - prior_at < timedelta(seconds=self._settings.presentation.cooldown_seconds)
@@ -125,7 +144,13 @@ class NewsCollector:
             started_at=now,
             ends_at=now + timedelta(seconds=seconds),
         )
-        self._presented[cluster.id] = (cluster.importance.level, now)
+        fingerprint = cluster_fingerprint(cluster)
+        self._presented[fingerprint] = (cluster.importance.level, now)
+        if self._memory is not None:
+            try:
+                self._memory.record(fingerprint, cluster.importance.level.value, now)
+            except Exception as error:
+                logger.warning("Could not persist News presentation memory: %s", error)
         if self._expiry_task is not None:
             self._expiry_task.cancel()
         self._expiry_task = asyncio.create_task(self._expire_after(presentation.ends_at))

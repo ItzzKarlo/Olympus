@@ -7,7 +7,10 @@ import unittest
 from olympus_core.persistence.database import Database
 from olympus_core.persistence.devices import DeviceRepository
 from olympus_core.persistence.enrollment import EnrollmentError, EnrollmentRepository, _hash_token
+from olympus_core.persistence.incidents import IncidentRepository
 from olympus_core.persistence.migrations import apply_migrations
+from olympus_core.persistence.news_memory import NewsMemoryRepository
+from olympus_core.models.monitoring import ActiveAlert, EventSeverity
 
 
 class PersistenceTests(unittest.TestCase):
@@ -31,6 +34,21 @@ class PersistenceTests(unittest.TestCase):
         self.assertEqual(version, 1)
         self.assertEqual(mode, "wal")
         self.assertEqual(foreign_keys, 1)
+
+    def test_bootstrap_metadata_database_migrates_to_latest(self) -> None:
+        older_path = Path(self.temporary.name) / "older.db"
+        connection = sqlite3.connect(older_path)
+        connection.execute(
+            "CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"
+        )
+        connection.commit()
+        connection.close()
+        older = Database(older_path)
+        older.initialize()
+        with older.connect() as connection:
+            self.assertIsNotNone(connection.execute(
+                "SELECT name FROM sqlite_schema WHERE name = 'trusted_devices'"
+            ).fetchone())
 
     def test_failed_migration_rolls_back(self) -> None:
         connection = sqlite3.connect(":memory:")
@@ -112,6 +130,39 @@ class PersistenceTests(unittest.TestCase):
         )
         self.assertFalse(replaced.revoked)
         self.assertNotEqual(replaced.public_key, first.token)
+
+    def test_retention_cleanup_removes_expired_tokens(self) -> None:
+        enrollment = EnrollmentRepository(self.database)
+        created = enrollment.create(
+            ttl_minutes=1,
+            now=datetime.now(timezone.utc) - timedelta(minutes=2),
+        )
+        self.assertTrue(created.token.startswith("OLYMPUS-"))
+        self.assertEqual(enrollment.cleanup(), 1)
+
+    def test_incident_and_news_retention_is_bounded(self) -> None:
+        now = datetime.now(timezone.utc)
+        incidents = IncidentRepository(self.database)
+        incidents.open(ActiveAlert(
+            id="old-incident",
+            incident_key="service:old",
+            type="service.down",
+            severity=EventSeverity.WARNING,
+            title="Old service down",
+            message="Old failure",
+            source="old",
+            started_at=now - timedelta(days=40),
+        ))
+        incidents.resolve(
+            "service:old", now - timedelta(days=39), 86_400, {}
+        )
+        self.assertEqual(incidents.cleanup(30, now), 1)
+
+        memory = NewsMemoryRepository(self.database)
+        memory.record("old", "important", now - timedelta(days=8))
+        memory.record("fresh", "important", now - timedelta(days=1))
+        self.assertEqual(memory.cleanup(7, now), 1)
+        self.assertEqual(set(memory.load(7, now)), {"fresh"})
 
 
 if __name__ == "__main__":

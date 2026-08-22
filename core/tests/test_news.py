@@ -1,6 +1,8 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
 from dataclasses import replace
+from pathlib import Path
+import tempfile
 import unittest
 
 import httpx
@@ -17,6 +19,8 @@ from olympus_core.integrations.news.engine import NewsEngine
 from olympus_core.integrations.news.normalization import canonicalize_url, parse_feed
 from olympus_core.integrations.news.rss import RssNewsProvider
 from olympus_core.models.news import NewsArticle, NewsImportanceLevel, NewsSource, NewsTopic
+from olympus_core.persistence.database import Database
+from olympus_core.persistence.news_memory import NewsMemoryRepository
 
 
 NOW = datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc)
@@ -276,6 +280,56 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(major.presentation.level, NewsImportanceLevel.MAJOR)
         self.assertEqual([event.type for event in events], ["news.story.important", "news.story.major"])
         collector.stop()
+
+    async def test_presentation_memory_blocks_restart_repeat_but_allows_escalation(self) -> None:
+        settings = replace(SETTINGS, presentation=replace(
+            SETTINGS.presentation,
+            important_threshold=0.65,
+            major_threshold=0.80,
+            news_scene_seconds=30,
+            major_scene_seconds=30,
+        ))
+        baseline = article(FEEDS[0], "Routine standards meeting concludes", identifier="baseline")
+        title = "Emergency rail network disruption affects southern Germany today"
+        one = article(FEEDS[0], title, identifier="one", topic=NewsTopic.TRANSPORT)
+        two = article(FEEDS[1], title, identifier="two", topic=NewsTopic.TRANSPORT)
+        three = article(FEEDS[2], title, identifier="three", topic=NewsTopic.TRANSPORT)
+        with tempfile.TemporaryDirectory() as directory:
+            database = Database(Path(directory) / "core.db")
+            database.initialize()
+            memory = NewsMemoryRepository(database)
+            first = NewsCollector(
+                settings,
+                StubProvider([
+                    [result(FEEDS[0], baseline)],
+                    [result(FEEDS[0], one), result(FEEDS[1], two)],
+                ]),
+                lambda state: None,
+                lambda event: None,
+                memory,
+            )
+            await first.poll_once()
+            presented = await first.poll_once()
+            self.assertEqual(presented.presentation.level, NewsImportanceLevel.IMPORTANT)
+            first.stop()
+
+            restarted = NewsCollector(
+                settings,
+                StubProvider([
+                    [result(FEEDS[0], baseline)],
+                    [result(FEEDS[0], one), result(FEEDS[1], two)],
+                    [result(FEEDS[2], three)],
+                ]),
+                lambda state: None,
+                lambda event: None,
+                memory,
+            )
+            await restarted.poll_once()
+            repeated = await restarted.poll_once()
+            self.assertIsNone(repeated.presentation)
+            escalated = await restarted.poll_once()
+            self.assertEqual(escalated.presentation.level, NewsImportanceLevel.MAJOR)
+            restarted.stop()
 
 
 class NewsConfigTests(unittest.TestCase):
