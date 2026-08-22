@@ -91,7 +91,14 @@ macOS / Windows / Linux Agents
              └─ active incidents + recoveries
 ```
 
-Olympus v0.5 implements this full local path. Agents own device-specific
+Optional local application observers join the same path without bypassing the
+machine Agent:
+
+```text
+Minecraft + Fabric observer → localhost Agent → Core → Display
+```
+
+Olympus v0.6 implements this full local path. Agents own device-specific
 observation, Core owns interpretation and monitoring, and the Display consumes
 only Core's normalized state.
 
@@ -284,6 +291,9 @@ Optional settings:
 - `OLYMPUS_TELEMETRY_INTERVAL` — telemetry interval in seconds (default `2`)
 - `OLYMPUS_RECONNECT_DELAY` — retry delay in seconds (default `3`)
 - `OLYMPUS_AGENT_ID_PATH` — identity file override for development/testing
+- `OLYMPUS_INTEGRATION_PORT` — local observer TCP port (default `38765`)
+- `OLYMPUS_INTEGRATION_STALE_SECONDS` — time before disconnected rich state
+  expires (default `5`)
 
 ## Run the Windows agent
 
@@ -365,12 +375,56 @@ external ETW-based tool; see its [official project](https://github.com/GameTechD
 and [console documentation](https://github.com/GameTechDev/PresentMon/blob/main/README-ConsoleApplication.md)
 for installation and capture options.
 
-The gaming foundation is intentionally anti-cheat-conscious. It uses external
+The generic gaming foundation is intentionally anti-cheat-conscious. It uses external
 process observation, Windows foreground APIs, ordinary system telemetry, and
 optional external presentation data. It does not inject code, hook DirectX,
-scan protected memory, bypass anti-cheat, or claim deep in-game data. Player
-count, kills, health, inventory, coordinates, and actual game-server latency are
-not part of v0.5.
+scan protected memory, or bypass anti-cheat. Deep state is provided only by an
+explicit application-level observer such as the optional Minecraft Fabric mod.
+
+## Minecraft deep integration
+
+Minecraft process detection remains built into the normal Windows/Linux agent.
+It activates the generic Minecraft Gaming scene whether or not the optional
+Fabric observer is installed. The observer only enriches an already detected
+Minecraft session, and the Display returns to that generic scene within a few
+seconds if the observer disconnects.
+
+The client-only observer reports, where Minecraft exposes the value reliably:
+
+- multiplayer server or singleplayer world context
+- position, dimension, and biome
+- health, food, and armor
+- XP level/progress and game mode
+- damage, healing, low-health, death, dimension, join, and leave events
+
+It deliberately does not collect chat, private messages, player lists,
+inventory, screenshots, or input. It has no commands and cannot control the
+game. Its only network connection is persistent loopback TCP to the local
+Olympus Agent; the existing Agent WebSocket carries normalized state and events
+onward to Core.
+
+### Build and install the Fabric observer
+
+The project targets Java 21 and keeps all Minecraft/Fabric versions in
+`integrations/minecraft-fabric/gradle.properties`, independent of Olympus Core.
+With Gradle 9.5 or newer available:
+
+```bash
+cd integrations/minecraft-fabric
+gradle build
+```
+
+Copy `build/libs/olympus-minecraft-0.1.0.jar` into the Minecraft client's
+`mods` directory alongside the matching Fabric Loader and Fabric API. It is a
+client-only mod; multiplayer servers do not install it. To update Minecraft,
+Loader, Loom, or Fabric API later, change only the pinned values in
+`gradle.properties`, then rebuild and run the tests.
+
+The observer reconnects automatically if the Agent starts later or restarts.
+It publishes deduplicated state at roughly four updates per second and sends
+events immediately. If the Agent port is customized, start Minecraft with
+`-Dolympus.integration.port=<port>` or set `OLYMPUS_INTEGRATION_PORT` in the
+Minecraft process environment to the same value.
 
 ## Run the Display
 
@@ -390,7 +444,7 @@ When the Display is not running on Hermes itself, configure the Core endpoint:
 VITE_OLYMPUS_CORE_WS=ws://10.10.0.10:8000/ws/display npm run dev
 ```
 
-For v0.5, the Display is a browser-based development UI. It is not yet packaged
+For v0.6, the Display is a browser-based development UI. It is not yet packaged
 or deployed as a kiosk.
 
 ## Test
@@ -410,10 +464,13 @@ python -m unittest discover -s tests
 
 cd ../../display
 npm run build
+
+cd ../integrations/minecraft-fabric
+gradle build
 ```
 
 The current milestone does not include a database, Olympus authentication,
-Docker, kiosk packaging, deep game integrations, Matchday, or future information
-scenes. FPS remains an optional external Windows input, and unavailable metrics
-are omitted. macOS and Windows CPU temperature remain unavailable unless a
-future reliable local provider is added.
+Docker, kiosk packaging, application control, audio/RGB output, Matchday, or
+future information scenes. FPS remains an optional external Windows input, and
+unavailable metrics are omitted. macOS and Windows CPU temperature remain
+unavailable unless a future reliable local provider is added.

@@ -1,4 +1,4 @@
-# Olympus v0.5 monitoring configuration. Copy to core/config.toml.
+# Olympus v0.6 monitoring configuration. Copy to core/config.toml.
 core_host_poll_seconds = 5
 
 [network]

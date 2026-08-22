@@ -1,9 +1,13 @@
 import asyncio
 import json
+from pathlib import Path
 import unittest
+from unittest.mock import patch
 
+from olympus_agent_common.config import AgentConfig
 from olympus_agent_common.integrations import LocalIntegrationServer
 from olympus_agent_common.minecraft import normalize_minecraft_state
+from olympus_agent_common.runtime import run_connection
 
 
 HELLO = {
@@ -124,6 +128,86 @@ class LocalIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await asyncio.wait_for(reader.read(), 1), b"")
         writer.close()
         await writer.wait_closed()
+
+    async def test_agent_core_connection_survives_local_integration_disconnect(self) -> None:
+        class FakeCoreSocket:
+            def __init__(self) -> None:
+                self.sent: list[dict[str, object]] = []
+
+            async def __aenter__(self) -> "FakeCoreSocket":
+                return self
+
+            async def __aexit__(self, *_: object) -> None:
+                return None
+
+            async def send(self, raw_message: str) -> None:
+                self.sent.append(json.loads(raw_message))
+
+            async def recv(self) -> str:
+                return json.dumps({"type": "welcome", "agent_id": "test-agent"})
+
+        core_socket = FakeCoreSocket()
+        config = AgentConfig(
+            core_ws_url="ws://core.invalid/ws/agents",
+            telemetry_interval=0.01,
+            reconnect_delay=0.01,
+            identity_path=Path("/tmp/unused-olympus-test-identity"),
+        )
+
+        def collect() -> dict[str, object]:
+            return {
+                "type": "telemetry",
+                "system": {
+                    "cpu_percent": 1,
+                    "ram_percent": 2,
+                    "ram_used_bytes": 2,
+                    "ram_total_bytes": 100,
+                },
+                "activity": {
+                    "mode": "gaming",
+                    "application": "Minecraft",
+                    "process_name": "javaw.exe",
+                    "game": {"id": "minecraft", "name": "Minecraft"},
+                },
+            }
+
+        with patch("olympus_agent_common.runtime.connect", return_value=core_socket):
+            task = asyncio.create_task(run_connection(
+                config,
+                "test-agent",
+                "windows",
+                "11",
+                "0.6.0",
+                collect,
+                self.server,
+            ))
+            for _ in range(20):
+                if core_socket.sent:
+                    break
+                await asyncio.sleep(0.01)
+
+            reader, writer = await self.connect()
+            await send(writer, HELLO)
+            await reader.readline()
+            await send(writer, {
+                "protocol": 1,
+                "type": "state",
+                "integration": "minecraft",
+                "payload": MINECRAFT_STATE,
+            })
+            writer.close()
+            await writer.wait_closed()
+            for _ in range(20):
+                if not self.server.snapshot()["minecraft"]["connected"]:
+                    break
+                await asyncio.sleep(0.01)
+
+            sent_after_disconnect = len(core_socket.sent)
+            await asyncio.sleep(0.04)
+            self.assertFalse(task.done())
+            self.assertGreater(len(core_socket.sent), sent_after_disconnect)
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
         reader, writer = await self.connect()
         await send(writer, HELLO)
