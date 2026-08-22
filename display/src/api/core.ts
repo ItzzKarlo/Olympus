@@ -1,5 +1,5 @@
 import type {
-  ActivityMode, ActivityTelemetry, ActiveAlert, CalendarEvent, CalendarState, CoreHostState, CurrentWeather, DailyWeather, DisplayEventMessage, GameInfo, GameplayEvent, GamingState, GpuTelemetry,
+  ActivityMode, ActivityTelemetry, ActiveAlert, CalendarEvent, CalendarState, CoreHostState, CurrentWeather, DailyWeather, DisplayEventMessage, FootballDisplayEvent, FootballLineupPlayer, FootballLineups, FootballMatch, FootballMatchEvent, FootballState, FootballStatistics, FootballTeam, FootballTeamLineup, FootballTeamStatistics, GameInfo, GameplayEvent, GamingState, GpuTelemetry,
   MachineState, MediaAlbum, MediaArtist, MediaContext, MediaQueueTrack,
   MediaState, MediaTrack, NetworkState, NetworkTelemetry, OlympusState,
   ProbeState, RecoveryNotice, ServiceState, StorageTelemetry, SystemTelemetry,
@@ -25,7 +25,7 @@ function isOptionalNumber(value: unknown): value is number | null | undefined {
 }
 
 function isActivityMode(value: unknown): value is ActivityMode {
-  return ["idle", "development", "gaming", "media", "night", "unknown"].includes(value as string);
+  return ["idle", "development", "gaming", "media", "night", "matchday", "unknown"].includes(value as string);
 }
 
 function isSystemTelemetry(value: unknown): value is SystemTelemetry {
@@ -172,6 +172,85 @@ function isGameplayEvent(value: unknown): value is GameplayEvent {
     isRecord(value.payload);
 }
 
+const MATCH_PHASES = ["none", "upcoming", "pre_match", "live", "half_time", "finished", "post_match", "postponed", "cancelled", "suspended", "unknown"];
+const FOOTBALL_EVENT_TYPES = ["goal", "own_goal", "penalty_goal", "missed_penalty", "yellow_card", "red_card", "second_yellow", "substitution", "var", "unknown"];
+
+function isFootballTeam(value: unknown): value is FootballTeam {
+  return isRecord(value) && typeof value.id === "string" && typeof value.name === "string" &&
+    typeof value.short_name === "string" && isNullableString(value.code);
+}
+
+function isFootballScore(value: unknown): boolean {
+  return isRecord(value) && isOptionalNumber(value.home) && isOptionalNumber(value.away);
+}
+
+function isFootballMatch(value: unknown): value is FootballMatch {
+  return isRecord(value) && typeof value.id === "string" && isRecord(value.competition) &&
+    typeof value.competition.id === "string" && typeof value.competition.name === "string" &&
+    typeof value.kickoff === "string" && (value.venue === null || (isRecord(value.venue) && typeof value.venue.name === "string")) &&
+    isFootballTeam(value.home) && isFootballTeam(value.away) && MATCH_PHASES.includes(value.status as string) &&
+    (value.clock === null || (isRecord(value.clock) && isOptionalNumber(value.clock.minute) &&
+      isOptionalNumber(value.clock.added_time) && typeof value.clock.period === "string")) && isFootballScore(value.score);
+}
+
+function isFootballPlayer(value: unknown): boolean {
+  return isRecord(value) && isNullableString(value.id) && typeof value.name === "string";
+}
+
+function isFootballMatchEvent(value: unknown): value is FootballMatchEvent {
+  return isRecord(value) && typeof value.id === "string" && FOOTBALL_EVENT_TYPES.includes(value.type as string) &&
+    isOptionalNumber(value.minute) && isOptionalNumber(value.added_time) &&
+    (value.team === null || isFootballTeam(value.team)) && (value.player === null || isFootballPlayer(value.player)) &&
+    (value.assist === null || isFootballPlayer(value.assist)) && (value.score_after === null || isFootballScore(value.score_after)) &&
+    typeof value.for_tracked_team === "boolean" && isNullableString(value.detail);
+}
+
+function isFootballLineupPlayer(value: unknown): value is FootballLineupPlayer {
+  return isFootballPlayer(value) && isRecord(value) && isOptionalNumber(value.number) &&
+    isNullableString(value.position) && typeof value.starter === "boolean";
+}
+
+function isFootballTeamLineup(value: unknown): value is FootballTeamLineup {
+  return isRecord(value) && isFootballTeam(value.team) && isNullableString(value.formation) &&
+    Array.isArray(value.players) && value.players.every(isFootballLineupPlayer);
+}
+
+function isFootballLineups(value: unknown): value is FootballLineups {
+  return isRecord(value) && (value.home === null || isFootballTeamLineup(value.home)) &&
+    (value.away === null || isFootballTeamLineup(value.away));
+}
+
+function isFootballTeamStatistics(value: unknown): value is FootballTeamStatistics {
+  if (!isRecord(value)) return false;
+  return ["possession_percent", "shots", "shots_on_target", "corners", "fouls", "yellow_cards", "red_cards", "offsides", "passes", "pass_accuracy_percent"]
+    .every((field) => isOptionalNumber(value[field]));
+}
+
+function isFootballStatistics(value: unknown): value is FootballStatistics {
+  return isRecord(value) && (value.home === null || isFootballTeamStatistics(value.home)) &&
+    (value.away === null || isFootballTeamStatistics(value.away));
+}
+
+function isFootballState(value: unknown): value is FootballState {
+  if (!isRecord(value) || typeof value.available !== "boolean" || typeof value.stale !== "boolean" ||
+    typeof value.observed_at !== "string" || !isFootballTeam(value.tracked_team) ||
+    !(value.next_match === null || isFootballMatch(value.next_match))) return false;
+  if (value.matchday === null) return true;
+  const context = value.matchday;
+  return isRecord(context) && typeof context.active === "boolean" && MATCH_PHASES.includes(context.phase as string) &&
+    isFootballTeam(context.tracked_team) && isFootballMatch(context.match) && Array.isArray(context.events) &&
+    context.events.every(isFootballMatchEvent) && (context.lineups === null || isFootballLineups(context.lineups)) &&
+    (context.statistics === null || isFootballStatistics(context.statistics)) && typeof context.stale === "boolean" &&
+    typeof context.observed_at === "string";
+}
+
+function isFootballDisplayEvent(value: unknown): value is FootballDisplayEvent {
+  return isRecord(value) && typeof value.id === "string" && typeof value.type === "string" &&
+    value.category === "football" && ["info", "warning", "critical"].includes(value.severity as string) &&
+    typeof value.timestamp === "string" && typeof value.source === "string" && isRecord(value.payload) &&
+    (value.payload.event === undefined || isFootballMatchEvent(value.payload.event));
+}
+
 const WEATHER_CONDITIONS: WeatherCondition[] = [
   "clear", "mostly_clear", "partly_cloudy", "cloudy", "fog", "drizzle",
   "rain", "heavy_rain", "snow", "thunderstorm", "unknown",
@@ -280,6 +359,7 @@ export function parseStateMessage(rawMessage: string): OlympusState | null {
     !(value.timezone === undefined || typeof value.timezone === "string") ||
     !(value.weather === undefined || value.weather === null || isWeatherState(value.weather)) ||
     !(value.calendar === undefined || value.calendar === null || isCalendarState(value.calendar)) ||
+    !(value.football === undefined || value.football === null || isFootballState(value.football)) ||
     !(value.time_policy === undefined || isTimePolicyState(value.time_policy)) ||
     !(value.core_host === undefined || value.core_host === null || isCoreHostState(value.core_host)) ||
     !(value.network === undefined || value.network === null || isNetworkState(value.network)) ||
@@ -296,6 +376,7 @@ export function parseStateMessage(rawMessage: string): OlympusState | null {
     timezone: (value.timezone as string | undefined) ?? "UTC",
     weather: (value.weather as WeatherState | null | undefined) ?? null,
     calendar: (value.calendar as CalendarState | null | undefined) ?? null,
+    football: (value.football as FootballState | null | undefined) ?? null,
     time_policy: (value.time_policy as TimePolicyState | undefined) ?? {
       is_night: false,
       period_started_at: null,
@@ -318,7 +399,7 @@ export function parseStateMessage(rawMessage: string): OlympusState | null {
 export function parseDisplayMessage(rawMessage: string): OlympusState | DisplayEventMessage | null {
   let value: unknown;
   try { value = JSON.parse(rawMessage); } catch { return null; }
-  if (isRecord(value) && value.type === "event" && isGameplayEvent(value.event)) {
+  if (isRecord(value) && value.type === "event" && (isGameplayEvent(value.event) || isFootballDisplayEvent(value.event))) {
     return value as unknown as DisplayEventMessage;
   }
   return parseStateMessage(rawMessage);

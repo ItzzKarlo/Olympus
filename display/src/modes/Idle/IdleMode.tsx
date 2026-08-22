@@ -1,6 +1,7 @@
 import { Brand } from "../../components/Brand";
 import { AmbientStatus } from "../../components/AmbientStatus";
 import { ConnectionStatus } from "../../components/ConnectionStatus";
+import { NextMatchAmbient } from "../../components/NextMatchAmbient";
 import type { CalendarEvent, ConnectionStatus as Status, OlympusState } from "../../types/state";
 import {
   formatDate,
@@ -125,6 +126,13 @@ export function IdleMode({ connectionStatus, now, state }: IdleModeProps) {
             </div>
           </section>
         ) : null}
+
+        <NextMatchAmbient
+          match={state.football?.next_match ?? null}
+          now={now}
+          trackedTeamId={state.football?.tracked_team.id ?? ""}
+          timezone={state.timezone}
+        />
 
         {calendar && (calendar.today.length > 0 || calendar.tomorrow.length > 0) ? (
           <div className="ambient-calendar">

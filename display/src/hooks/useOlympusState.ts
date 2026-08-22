@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { getCoreWebSocketUrl, parseDisplayMessage } from "../api/core";
-import type { ConnectionStatus, GameplayEvent, OlympusState } from "../types/state";
+import type { ConnectionStatus, FootballDisplayEvent, GameplayEvent, OlympusState } from "../types/state";
 
 const RECONNECT_DELAY_MS = 2_000;
 
@@ -9,6 +9,7 @@ interface OlympusConnection {
   connectionStatus: ConnectionStatus;
   state: OlympusState | null;
   gameplayEvents: GameplayEvent[];
+  footballEvents: FootballDisplayEvent[];
 }
 
 export function useOlympusState(): OlympusConnection {
@@ -16,6 +17,7 @@ export function useOlympusState(): OlympusConnection {
     useState<ConnectionStatus>("connecting");
   const [state, setState] = useState<OlympusState | null>(null);
   const [gameplayEvents, setGameplayEvents] = useState<GameplayEvent[]>([]);
+  const [footballEvents, setFootballEvents] = useState<FootballDisplayEvent[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -52,6 +54,19 @@ export function useOlympusState(): OlympusConnection {
           setState(message);
           return;
         }
+        if (message.event.category === "football") {
+          const footballEvent = message.event;
+          setFootballEvents((current) => [...current.filter((item) => item.id !== footballEvent.id), footballEvent]);
+          const lifetime = footballEvent.type === "football.goal" ? 6_000
+            : footballEvent.type === "football.red_card" ? 3_200
+            : footballEvent.type === "football.yellow_card" ? 1_800 : 2_200;
+          const eventTimer = window.setTimeout(() => {
+            eventTimers.delete(eventTimer);
+            if (active) setFootballEvents((current) => current.filter((item) => item.id !== footballEvent.id));
+          }, lifetime);
+          eventTimers.add(eventTimer);
+          return;
+        }
         const gameplayEvent = message.event;
         setGameplayEvents((current) => [...current.filter((item) => item.id !== gameplayEvent.id), gameplayEvent]);
         const lifetime = gameplayEvent.type === "minecraft.player.died" ? 2_800
@@ -85,5 +100,5 @@ export function useOlympusState(): OlympusConnection {
     };
   }, []);
 
-  return { connectionStatus, gameplayEvents, state };
+  return { connectionStatus, footballEvents, gameplayEvents, state };
 }

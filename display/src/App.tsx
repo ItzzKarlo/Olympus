@@ -1,6 +1,7 @@
 import { Brand } from "./components/Brand";
 import { ConnectionStatus } from "./components/ConnectionStatus";
 import { EventOverlayLayer } from "./components/EventOverlayLayer";
+import { FootballEventLayer } from "./components/FootballEventLayer";
 import { GameplayEventLayer } from "./components/GameplayEventLayer";
 import { ParticleField } from "./components/ParticleField";
 import { useClock } from "./hooks/useClock";
@@ -10,6 +11,7 @@ import { DevelopmentMode } from "./modes/Development/DevelopmentMode";
 import { IdleMode } from "./modes/Idle/IdleMode";
 import { GamingMode } from "./modes/Gaming/GamingMode";
 import { MediaMode } from "./modes/Media/MediaMode";
+import { MatchdayMode } from "./modes/Matchday/MatchdayMode";
 import { NightMode } from "./modes/Night/NightMode";
 import { sceneStyle } from "./theme/SceneTheme";
 import { idleTheme } from "./theme/themes";
@@ -31,13 +33,15 @@ function StartupScreen() {
 }
 
 export default function App() {
-  const { connectionStatus, gameplayEvents, state } = useOlympusState();
+  const { connectionStatus, footballEvents, gameplayEvents, state } = useOlympusState();
   const now = useClock();
   const theme = useSceneTheme(connectionStatus === "connected" ? state : null);
 
   if (state === null) return <StartupScreen />;
 
-  const scene = state.mode === "gaming" && state.gaming ? (
+  const scene = state.mode === "matchday" && state.football?.matchday ? (
+      <MatchdayMode connectionStatus={connectionStatus} now={now} state={state} />
+    ) : state.mode === "gaming" && state.gaming ? (
       <GamingMode connectionStatus={connectionStatus} now={now} state={state} />
     ) : state.mode === "development" ? (
       <DevelopmentMode
@@ -56,13 +60,14 @@ export default function App() {
   return (
     <main className={`olympus-display mode-${state.mode}${state.time_policy.is_night ? " policy-night" : ""}`} style={sceneStyle(theme)}>
       <ParticleField
-        key={`${state.mode}:${state.gaming?.game.id ?? ""}:${state.weather?.current?.condition ?? ""}:${state.time_policy.is_night}`}
+        key={`${state.mode}:${state.gaming?.game.id ?? ""}:${state.football?.matchday?.phase ?? ""}:${state.weather?.current?.condition ?? ""}:${state.time_policy.is_night}`}
         theme={theme.particles}
       />
       <div key={state.mode} className="scene-transition">
         {scene}
       </div>
       <GameplayEventLayer events={gameplayEvents} />
+      <FootballEventLayer events={footballEvents} state={state} />
       <EventOverlayLayer alerts={state.alerts} now={now} recoveries={state.recoveries} />
       {connectionStatus !== "connected" ? (
         <div className="reconnect-banner" role="status">

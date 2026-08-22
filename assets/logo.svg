@@ -1,0 +1,181 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1400" viewBox="0 0 1400 1400" role="img" aria-labelledby="title desc">
+  <title id="title">Olympus — Home Display OS</title>
+  <desc id="desc">Olympus logo with a segmented circular O, geometric mountain peaks, purple and blue gradients, and a futuristic wordmark.</desc>
+
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="72%">
+      <stop offset="0%" stop-color="#101342"/>
+      <stop offset="42%" stop-color="#080B27"/>
+      <stop offset="100%" stop-color="#02040E"/>
+    </radialGradient>
+
+    <linearGradient id="ringGrad" x1="280" y1="390" x2="1070" y2="500" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#9D4DFF"/>
+      <stop offset="38%" stop-color="#6856E8"/>
+      <stop offset="70%" stop-color="#4B7FEA"/>
+      <stop offset="100%" stop-color="#7EC9FF"/>
+    </linearGradient>
+
+    <linearGradient id="ringStroke" x1="310" y1="270" x2="1050" y2="800" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#E6D9FF"/>
+      <stop offset="45%" stop-color="#8A7AFF"/>
+      <stop offset="100%" stop-color="#9BD8FF"/>
+    </linearGradient>
+
+    <linearGradient id="peakMain" x1="540" y1="520" x2="840" y2="850" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F4F0FF"/>
+      <stop offset="18%" stop-color="#BCA7FF"/>
+      <stop offset="48%" stop-color="#6E56E8"/>
+      <stop offset="100%" stop-color="#19133F"/>
+    </linearGradient>
+
+    <linearGradient id="peakLeft" x1="390" y1="720" x2="650" y2="940" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#D86CFF"/>
+      <stop offset="45%" stop-color="#8A40EC"/>
+      <stop offset="100%" stop-color="#241143"/>
+    </linearGradient>
+
+    <linearGradient id="peakRight" x1="760" y1="680" x2="1010" y2="930" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#BBD9FF"/>
+      <stop offset="42%" stop-color="#6570E6"/>
+      <stop offset="100%" stop-color="#18183D"/>
+    </linearGradient>
+
+    <linearGradient id="wordGrad" x1="250" y1="930" x2="1120" y2="1060" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F3F0FF"/>
+      <stop offset="44%" stop-color="#D6D4FF"/>
+      <stop offset="70%" stop-color="#B5C7FF"/>
+      <stop offset="100%" stop-color="#F0F5FF"/>
+    </linearGradient>
+
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="tinyGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <clipPath id="ringClip">
+      <path d="M700 252
+               A340 340 0 1 1 676 252
+               L676 344
+               A248 248 0 1 0 700 344 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1400" height="1400" fill="url(#bg)"/>
+
+  <!-- subtle ambient aura -->
+  <ellipse cx="700" cy="590" rx="430" ry="420" fill="#6B4DFF" opacity="0.065"/>
+  <ellipse cx="760" cy="540" rx="360" ry="330" fill="#3F9DFF" opacity="0.05"/>
+
+  <!-- Ring glow -->
+  <path d="M700 255
+           A340 340 0 1 1 672 255
+           L672 345
+           A250 250 0 1 0 700 345 Z"
+        fill="url(#ringGrad)" opacity="0.24" filter="url(#softGlow)"/>
+
+  <!-- Segmented O ring -->
+  <path d="M700 255
+           A340 340 0 1 1 672 255
+           L672 345
+           A250 250 0 1 0 700 345 Z"
+        fill="url(#ringGrad)"
+        stroke="url(#ringStroke)"
+        stroke-width="3"/>
+
+  <!-- top cut emphasis -->
+  <rect x="671" y="238" width="31" height="124" rx="2" fill="#070A22"/>
+
+  <!-- ring HUD details left -->
+  <g fill="#CFA9FF" opacity="0.92" filter="url(#tinyGlow)">
+    <circle cx="436" cy="515" r="3"/>
+    <circle cx="432" cy="539" r="2.6"/>
+    <circle cx="430" cy="563" r="2.5"/>
+    <circle cx="431" cy="587" r="2.2"/>
+    <circle cx="435" cy="611" r="2"/>
+    <circle cx="441" cy="635" r="1.8"/>
+  </g>
+
+  <!-- ring HUD details right -->
+  <g fill="none" stroke="#86B9FF" stroke-width="2" opacity="0.58">
+    <path d="M948 546 H1016"/>
+    <path d="M958 610 H1010"/>
+    <path d="M958 610 L930 673"/>
+    <path d="M924 681 L904 720"/>
+  </g>
+
+  <!-- Mountain range -->
+  <g filter="url(#tinyGlow)">
+    <!-- left peak -->
+    <path d="M400 850 L545 715 L615 782 L700 890 Z"
+          fill="url(#peakLeft)"
+          stroke="#B86CFF"
+          stroke-width="2"/>
+    <path d="M545 715 L545 787 L400 850 Z"
+          fill="#AF4EF8" opacity="0.60"/>
+    <path d="M545 715 L615 782 L545 787 Z"
+          fill="#5A2AAE" opacity="0.85"/>
+
+    <!-- right peak -->
+    <path d="M700 890 L840 715 L1005 850 Z"
+          fill="url(#peakRight)"
+          stroke="#8EA9FF"
+          stroke-width="2"/>
+    <path d="M840 715 L840 787 L1005 850 Z"
+          fill="#7E8CF5" opacity="0.72"/>
+    <path d="M840 715 L700 890 L840 787 Z"
+          fill="#27215E" opacity="0.85"/>
+
+    <!-- central Olympus peak -->
+    <path d="M545 810 L700 555 L855 810 L700 900 Z"
+          fill="url(#peakMain)"
+          stroke="#D8D4FF"
+          stroke-width="2.5"/>
+    <path d="M700 555 L700 900 L545 810 Z"
+          fill="#7A58E5" opacity="0.58"/>
+    <path d="M700 555 L855 810 L700 900 Z"
+          fill="#E4EEFF" opacity="0.68"/>
+    <path d="M700 555 L700 625 L659 690 Z"
+          fill="#FFFFFF" opacity="0.82"/>
+  </g>
+
+  <!-- crisp internal geometry -->
+  <g fill="none" stroke="#9B83FF" stroke-width="1.5" opacity="0.75">
+    <path d="M700 625 V900"/>
+    <path d="M545 787 L700 900 L840 787"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="700" y="1060"
+        text-anchor="middle"
+        font-family="Avenir Next, Avenir, Inter, Helvetica Neue, Arial, sans-serif"
+        font-size="150"
+        font-weight="300"
+        letter-spacing="3"
+        fill="url(#wordGrad)">Olympus</text>
+
+  <!-- Subtitle + rails -->
+  <g fill="#8376E7" stroke="#8376E7">
+    <line x1="280" y1="1132" x2="345" y2="1132" stroke-width="2"/>
+    <line x1="1055" y1="1132" x2="1120" y2="1132" stroke-width="2"/>
+  </g>
+  <text x="700" y="1147"
+        text-anchor="middle"
+        font-family="Inter, Helvetica Neue, Arial, sans-serif"
+        font-size="31"
+        font-weight="400"
+        letter-spacing="15"
+        fill="#8376E7">HOME DISPLAY OS</text>
+</svg>

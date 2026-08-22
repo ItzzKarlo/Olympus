@@ -286,12 +286,16 @@ class FootballConfigTests(unittest.TestCase):
                     "enabled": True,
                     "team_id": "157",
                     "poll_live_seconds": 20,
+                    "live_stale_seconds": 45,
+                    "unavailable_seconds": 600,
                     "matchday": {"pre_match_minutes": 75, "post_match_minutes": 25},
                 },
             }).football
         self.assertTrue(configured.configured)
         self.assertEqual(configured.timezone, "Europe/Berlin")
         self.assertEqual(configured.poll_live_seconds, 20)
+        self.assertEqual(configured.live_stale_seconds, 45)
+        self.assertEqual(configured.unavailable_seconds, 600)
         self.assertEqual(configured.matchday.pre_match_minutes, 75)
 
 

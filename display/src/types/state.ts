@@ -4,6 +4,7 @@ export type ActivityMode =
   | "gaming"
   | "media"
   | "night"
+  | "matchday"
   | "unknown";
 
 export interface SystemTelemetry {
@@ -249,9 +250,122 @@ export interface GameplayEvent {
   payload: Record<string, unknown>;
 }
 
+export type MatchPhase =
+  | "none" | "upcoming" | "pre_match" | "live" | "half_time"
+  | "finished" | "post_match" | "postponed" | "cancelled" | "suspended" | "unknown";
+
+export type FootballEventType =
+  | "goal" | "own_goal" | "penalty_goal" | "missed_penalty"
+  | "yellow_card" | "red_card" | "second_yellow" | "substitution" | "var" | "unknown";
+
+export interface FootballTeam {
+  id: string;
+  name: string;
+  short_name: string;
+  code: string | null;
+}
+
+export interface FootballCompetition { id: string; name: string; }
+export interface FootballVenue { name: string; }
+export interface FootballClock { minute: number | null; added_time: number | null; period: string; }
+export interface FootballScore { home: number | null; away: number | null; }
+
+export interface FootballMatch {
+  id: string;
+  competition: FootballCompetition;
+  kickoff: string;
+  venue: FootballVenue | null;
+  home: FootballTeam;
+  away: FootballTeam;
+  status: MatchPhase;
+  clock: FootballClock | null;
+  score: FootballScore;
+}
+
+export interface FootballPlayer { id: string | null; name: string; }
+export interface FootballLineupPlayer extends FootballPlayer {
+  number: number | null;
+  position: string | null;
+  starter: boolean;
+}
+export interface FootballTeamLineup {
+  team: FootballTeam;
+  formation: string | null;
+  players: FootballLineupPlayer[];
+}
+export interface FootballLineups {
+  home: FootballTeamLineup | null;
+  away: FootballTeamLineup | null;
+}
+
+export interface FootballTeamStatistics {
+  possession_percent: number | null;
+  shots: number | null;
+  shots_on_target: number | null;
+  corners: number | null;
+  fouls: number | null;
+  yellow_cards: number | null;
+  red_cards: number | null;
+  offsides: number | null;
+  passes: number | null;
+  pass_accuracy_percent: number | null;
+}
+export interface FootballStatistics {
+  home: FootballTeamStatistics | null;
+  away: FootballTeamStatistics | null;
+}
+
+export interface FootballMatchEvent {
+  id: string;
+  type: FootballEventType;
+  minute: number | null;
+  added_time: number | null;
+  team: FootballTeam | null;
+  player: FootballPlayer | null;
+  assist: FootballPlayer | null;
+  score_after: FootballScore | null;
+  for_tracked_team: boolean;
+  detail: string | null;
+}
+
+export interface MatchdayContext {
+  active: boolean;
+  phase: MatchPhase;
+  tracked_team: FootballTeam;
+  match: FootballMatch;
+  events: FootballMatchEvent[];
+  lineups: FootballLineups | null;
+  statistics: FootballStatistics | null;
+  stale: boolean;
+  observed_at: string;
+}
+
+export interface FootballState {
+  available: boolean;
+  stale: boolean;
+  observed_at: string;
+  tracked_team: FootballTeam;
+  next_match: FootballMatch | null;
+  matchday: MatchdayContext | null;
+}
+
+export interface FootballDisplayEvent {
+  id: string;
+  type: string;
+  category: "football";
+  severity: "info" | "warning" | "critical";
+  timestamp: string;
+  source: string;
+  payload: {
+    match_id?: string;
+    event?: FootballMatchEvent;
+    [key: string]: unknown;
+  };
+}
+
 export interface DisplayEventMessage {
   type: "event";
-  event: GameplayEvent;
+  event: GameplayEvent | FootballDisplayEvent;
 }
 
 export type WeatherCondition =
@@ -335,6 +449,7 @@ export interface OlympusState {
   weather: WeatherState | null;
   calendar: CalendarState | null;
   time_policy: TimePolicyState;
+  football: FootballState | null;
   gaming: GamingState | null;
   media: MediaState | null;
   core_host: CoreHostState | null;

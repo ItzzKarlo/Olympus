@@ -306,6 +306,14 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
                 str(football_data.get("poll_post_match_seconds")) if football_data.get("poll_post_match_seconds") is not None else None,
                 60.0,
             ),
+            live_stale_seconds=_positive_float(
+                str(football_data.get("live_stale_seconds")) if football_data.get("live_stale_seconds") is not None else None,
+                60.0,
+            ),
+            unavailable_seconds=_positive_float(
+                str(football_data.get("unavailable_seconds")) if football_data.get("unavailable_seconds") is not None else None,
+                900.0,
+            ),
         ),
     )
 

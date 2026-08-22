@@ -1793,6 +1793,153 @@ select {
   }
 }
 
+.ambient-football {
+  display: grid;
+  grid-column: 2;
+  gap: .28rem;
+  align-self: end;
+  justify-self: end;
+  min-width: min(100%, 20rem);
+  padding: 1rem 0 1rem 1.35rem;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 60%, var(--line));
+  text-align: left;
+}
+
+.ambient-football > span,
+.ambient-football small {
+  color: var(--quiet);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: .58rem;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+.ambient-football strong { font-size: clamp(.95rem, 1.25vw, 1.25rem); font-weight: 520; }
+.ambient-football small { color: var(--accent); letter-spacing: .07em; }
+.ambient-football--compact { grid-column: auto; justify-self: start; margin-top: 2rem; }
+
+.scene--matchday { isolation: isolate; }
+.matchday-header { position: relative; z-index: 2; }
+.matchday-header__context { display: flex; align-items: center; gap: 1.2rem; }
+.matchday-header__context > span { color: var(--muted); font-size: .72rem; }
+.matchday-header__context > strong { color: var(--accent); font-family: "SFMono-Regular", Consolas, monospace; font-size: .68rem; letter-spacing: .16em; text-transform: uppercase; }
+
+.matchday-prematch-stage,
+.matchday-live-stage {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  flex: 1;
+  width: min(100%, 112rem);
+  margin: 0 auto;
+  padding: clamp(3rem, 8vh, 7.5rem) 0 clamp(2rem, 5vh, 4rem);
+}
+
+.matchday-prematch-stage {
+  grid-template-columns: minmax(0, 1.35fr) minmax(14rem, .45fr) minmax(19rem, .7fr);
+  gap: clamp(2rem, 5vw, 6rem);
+  align-items: center;
+}
+
+.matchday-prematch-hero { min-width: 0; }
+.matchday-versus { display: grid; gap: .25rem; margin-top: 1rem; }
+.matchday-versus strong { font-size: clamp(4.5rem, 8vw, 9.5rem); font-weight: 260; letter-spacing: -.075em; line-height: .82; }
+.matchday-versus strong:last-child { color: var(--muted); }
+.matchday-versus span { margin: .65rem 0 .4rem .35rem; color: var(--accent); font-family: "SFMono-Regular", Consolas, monospace; font-size: .72rem; letter-spacing: .2em; text-transform: uppercase; }
+.matchday-prematch-hero > p:last-child { margin: 2rem 0 0 .35rem; color: var(--muted); font-size: clamp(.8rem, 1vw, 1rem); }
+
+.matchday-kickoff {
+  display: grid;
+  gap: .55rem;
+  padding: 2.1rem 0 2.1rem 2rem;
+  border-left: 1px solid var(--line);
+}
+.matchday-kickoff span,
+.matchday-kickoff small { color: var(--muted); font-family: "SFMono-Regular", Consolas, monospace; font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; }
+.matchday-kickoff time { color: var(--accent); font-size: clamp(3rem, 4vw, 4.8rem); font-weight: 270; letter-spacing: -.06em; }
+.matchday-kickoff small { color: var(--text); letter-spacing: .06em; }
+
+.matchday-lineup { align-self: stretch; padding-left: clamp(1rem, 2.2vw, 2.5rem); border-left: 1px solid var(--line); }
+.matchday-lineup header { display: flex; justify-content: space-between; padding-bottom: .7rem; border-bottom: 1px solid var(--line); color: var(--quiet); font-family: "SFMono-Regular", Consolas, monospace; font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; }
+.matchday-lineup header small { color: var(--accent); font: inherit; }
+.matchday-lineup ol { margin: 0; padding: 0; list-style: none; }
+.matchday-lineup li { display: grid; grid-template-columns: 2rem 1fr auto; align-items: center; min-height: 2.65rem; border-bottom: 1px solid color-mix(in srgb, var(--line) 65%, transparent); font-size: .76rem; }
+.matchday-lineup li > span { color: var(--accent); font-family: "SFMono-Regular", Consolas, monospace; }
+.matchday-lineup li small { color: var(--quiet); font-size: .56rem; text-transform: uppercase; }
+
+.matchday-live-stage { align-content: center; gap: clamp(3rem, 7vh, 6rem); }
+.matchday-scoreboard { display: grid; grid-template-columns: minmax(0, 1fr) minmax(22rem, .65fr) minmax(0, 1fr); align-items: center; gap: clamp(2rem, 4vw, 5rem); }
+.matchday-team { min-width: 0; }
+.matchday-team--away { text-align: right; }
+.matchday-team > p { margin: 0 0 .8rem; color: var(--quiet); font-family: "SFMono-Regular", Consolas, monospace; font-size: .58rem; letter-spacing: .18em; text-transform: uppercase; }
+.matchday-team h1 { margin: 0; font-size: clamp(3.8rem, 7vw, 8.2rem); font-weight: 250; letter-spacing: -.075em; line-height: .88; text-wrap: balance; }
+.matchday-team--home h1 { color: var(--accent); }
+
+.matchday-score { display: grid; justify-items: center; gap: .45rem; padding: 1.8rem; border-inline: 1px solid var(--line); text-align: center; }
+.matchday-score > span { color: var(--accent); font-family: "SFMono-Regular", Consolas, monospace; font-size: .78rem; font-weight: 700; letter-spacing: .18em; }
+.matchday-score > strong { display: flex; align-items: center; gap: 1rem; font-size: clamp(5rem, 8vw, 9rem); font-weight: 230; font-variant-numeric: tabular-nums; letter-spacing: -.06em; line-height: .9; }
+.matchday-score > strong i { color: var(--quiet); font-size: .32em; font-style: normal; }
+.matchday-score small { color: var(--muted); font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; }
+
+.matchday-team-goals { display: grid; gap: .3rem; margin: 1.35rem 0 0; padding: 0; color: var(--muted); font-size: .7rem; list-style: none; }
+.matchday-team-goals li span { color: var(--accent); font-family: "SFMono-Regular", Consolas, monospace; }
+.matchday-team--away .matchday-team-goals li span { float: left; }
+
+.matchday-detail-grid { display: grid; grid-template-columns: minmax(20rem, .9fr) minmax(24rem, 1.1fr); gap: clamp(3rem, 7vw, 9rem); align-items: end; }
+.matchday-stats { display: grid; border-top: 1px solid var(--line); }
+.matchday-stats > div { display: grid; grid-template-columns: 1fr 1.4fr 1fr; align-items: center; min-height: 2.8rem; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.matchday-stats strong { font-family: "SFMono-Regular", Consolas, monospace; font-size: .78rem; font-weight: 600; }
+.matchday-stats strong:last-child { text-align: right; }
+.matchday-stats span { color: var(--quiet); font-size: .62rem; letter-spacing: .09em; text-align: center; text-transform: uppercase; }
+
+.matchday-events > p { margin: 0 0 .65rem; }
+.matchday-events ol { margin: 0; padding: 0; border-top: 1px solid var(--line); list-style: none; }
+.matchday-events li { display: grid; grid-template-columns: 3rem .5rem 1fr; align-items: center; gap: .8rem; min-height: 3rem; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.matchday-events time { color: var(--accent); font-family: "SFMono-Regular", Consolas, monospace; font-size: .68rem; }
+.matchday-events li > div { display: grid; gap: .1rem; }
+.matchday-events strong { font-size: .76rem; font-weight: 520; }
+.matchday-events small { color: var(--quiet); font-size: .56rem; text-transform: capitalize; }
+.matchday-event-mark { width: .45rem; height: .45rem; border-radius: 50%; background: var(--muted); }
+.matchday-event-mark--goal,
+.matchday-event-mark--penalty_goal,
+.matchday-event-mark--own_goal { background: var(--accent); box-shadow: 0 0 0 .25rem var(--accent-soft); }
+.matchday-event-mark--yellow_card { border-radius: 1px; background: var(--warning); }
+.matchday-event-mark--red_card,
+.matchday-event-mark--second_yellow { border-radius: 1px; background: var(--danger); }
+
+.matchday-stale { position: absolute; z-index: 3; right: clamp(1.4rem, 4.2vw, 5rem); bottom: 1rem; margin: 0; color: var(--warning); font-family: "SFMono-Regular", Consolas, monospace; font-size: .56rem; letter-spacing: .08em; text-transform: uppercase; }
+
+.football-event-layer { position: fixed; z-index: 20; inset: 0; pointer-events: none; }
+.football-reaction { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; animation: football-reaction-in 480ms cubic-bezier(.16, 1, .3, 1) both; }
+.football-reaction__message { position: relative; z-index: 2; display: grid; justify-items: center; gap: .25rem; text-align: center; }
+.football-reaction__message span { font-family: "SFMono-Regular", Consolas, monospace; font-size: .72rem; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
+.football-reaction__message strong { font-size: clamp(7rem, 20vw, 23rem); font-weight: 800; letter-spacing: -.085em; line-height: .78; }
+.football-reaction__message small { margin-top: 1.3rem; font-size: clamp(.85rem, 1.3vw, 1.3rem); }
+.football-reaction--tracked { color: #fff; background: rgba(167, 7, 35, .93); }
+.football-reaction--opponent { inset: auto clamp(1.5rem, 4vw, 5rem) clamp(1.5rem, 5vh, 4rem) auto; width: min(34rem, calc(100vw - 3rem)); height: auto; padding: 1.5rem 2rem; border: 1px solid var(--line); border-left: 4px solid var(--muted); background: var(--panel); backdrop-filter: blur(18px); }
+.football-reaction--opponent .football-reaction__message { justify-items: start; text-align: left; }
+.football-reaction--opponent .football-reaction__message strong { font-size: clamp(2rem, 4vw, 4rem); font-weight: 380; }
+.football-reaction--opponent .football-reaction__message small { margin-top: .35rem; }
+
+.football-goal-burst { position: absolute; inset: 0; }
+.football-goal-burst i { --angle: calc(var(--burst-index) * 20deg); position: absolute; top: 50%; left: 50%; width: clamp(.45rem, .8vw, .9rem); height: clamp(1.2rem, 2.4vw, 2.8rem); background: #fff; transform: translate(-50%, -50%) rotate(var(--angle)); animation: football-confetti 2.4s cubic-bezier(.17, .67, .26, 1) both; animation-delay: calc(var(--burst-index) * 22ms); }
+.football-goal-burst i:nth-child(3n) { background: #d9a9b4; }
+.football-goal-burst i:nth-child(3n + 2) { background: #1f0b10; }
+
+.football-reaction--callout { inset: auto clamp(1.5rem, 4vw, 5rem) clamp(1.5rem, 5vh, 4rem) auto; display: grid; width: min(30rem, calc(100vw - 3rem)); min-height: 7rem; padding: 1.4rem 1.8rem; place-items: start; border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--panel); backdrop-filter: blur(18px); }
+.football-reaction--callout > span { color: var(--accent); font-family: "SFMono-Regular", Consolas, monospace; font-size: .58rem; letter-spacing: .16em; text-transform: uppercase; }
+.football-reaction--callout > strong { margin-top: .35rem; font-size: 1.4rem; font-weight: 450; }
+.football-reaction--callout > small { margin-top: .45rem; color: var(--muted); }
+.football-reaction--yellow_card { border-left-color: var(--warning); }
+.football-reaction--red_card { border-left-color: var(--danger); }
+
+@keyframes football-reaction-in { from { opacity: 0; transform: translateY(1rem) scale(.98); } }
+@keyframes football-confetti {
+  0% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0) scale(.2); }
+  16% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-54vmax) rotate(420deg) scale(1); }
+}
+
 @media (max-width: 900px) {
   .scene__header,
   .development-focus {
@@ -1841,6 +1988,13 @@ select {
   .night-clock { font-size: clamp(7rem, 24vw, 12rem); }
   .night-agenda { padding-left: 0; padding-top: 2rem; border-top: 1px solid var(--line); border-left: 0; }
   .night-next h1 { max-width: 18ch; }
+
+  .ambient-football { grid-column: 1; justify-self: start; }
+  .matchday-prematch-stage { grid-template-columns: 1fr 16rem; align-items: start; }
+  .matchday-lineup { grid-column: 1 / -1; padding: 1.5rem 0 0; border-top: 1px solid var(--line); border-left: 0; }
+  .matchday-scoreboard { grid-template-columns: 1fr minmax(14rem, .7fr) 1fr; gap: 1.5rem; }
+  .matchday-team h1 { font-size: clamp(2.6rem, 7vw, 5rem); }
+  .matchday-detail-grid { grid-template-columns: 1fr; gap: 2.5rem; }
 
   .media-header__status {
     align-items: flex-end;
@@ -1974,6 +2128,16 @@ select {
   .night-clock { font-size: clamp(5.5rem, 27vw, 8rem); }
   .night-weather { margin-top: 2.5rem; }
   .night-agenda { gap: 2.5rem; }
+
+  .matchday-header__context > span { display: none; }
+  .matchday-prematch-stage { grid-template-columns: 1fr; padding-top: 3rem; }
+  .matchday-kickoff { padding-left: 1.25rem; }
+  .matchday-scoreboard { grid-template-columns: 1fr 8rem 1fr; gap: .7rem; }
+  .matchday-team h1 { font-size: clamp(1.8rem, 8vw, 3.6rem); }
+  .matchday-score { padding-inline: .6rem; }
+  .matchday-score > strong { gap: .35rem; font-size: clamp(3.2rem, 14vw, 5rem); }
+  .matchday-detail-grid { grid-template-columns: 1fr; }
+  .football-reaction__message strong { font-size: clamp(5.5rem, 25vw, 10rem); }
 }
 
 @media (prefers-reduced-motion: reduce) {
