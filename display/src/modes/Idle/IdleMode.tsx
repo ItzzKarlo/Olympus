@@ -1,4 +1,5 @@
 import { Brand } from "../../components/Brand";
+import { AmbientStatus } from "../../components/AmbientStatus";
 import { ConnectionStatus } from "../../components/ConnectionStatus";
 import { MachineCard } from "../../components/MachineCard";
 import type { ConnectionStatus as Status, OlympusState } from "../../types/state";
@@ -27,6 +28,8 @@ export function IdleMode({ connectionStatus, now, state }: IdleModeProps) {
         </time>
         <p className="idle-focus__date">{formatDate(now)}</p>
       </div>
+
+      <AmbientStatus state={state} />
 
       <div className="device-section">
         <div className="section-heading">

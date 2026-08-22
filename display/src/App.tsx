@@ -1,5 +1,6 @@
 import { Brand } from "./components/Brand";
 import { ConnectionStatus } from "./components/ConnectionStatus";
+import { EventOverlayLayer } from "./components/EventOverlayLayer";
 import { ParticleField } from "./components/ParticleField";
 import { useClock } from "./hooks/useClock";
 import { useOlympusState } from "./hooks/useOlympusState";
@@ -51,6 +52,7 @@ export default function App() {
       <div key={state.mode} className="scene-transition">
         {scene}
       </div>
+      <EventOverlayLayer alerts={state.alerts} now={now} recoveries={state.recoveries} />
       {connectionStatus !== "connected" ? (
         <div className="reconnect-banner" role="status">
           Core unavailable — keeping the last known room state while reconnecting
