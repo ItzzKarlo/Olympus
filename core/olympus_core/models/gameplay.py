@@ -4,6 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from olympus_core.models.monitoring import EventSeverity
+from olympus_core.models.football import FootballDisplayEvent
 
 
 class GameplayEventSource(BaseModel):
@@ -23,4 +24,4 @@ class GameplayEvent(BaseModel):
 
 class DisplayEventMessage(BaseModel):
     type: Literal["event"] = "event"
-    event: GameplayEvent
+    event: GameplayEvent | FootballDisplayEvent

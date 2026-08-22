@@ -26,6 +26,7 @@ from olympus_core.models.minecraft import MinecraftState
 from olympus_core.models.weather import WeatherState
 from olympus_core.models.calendar import CalendarState
 from olympus_core.models.time_policy import TimePolicyState
+from olympus_core.models.football import FootballState
 
 
 class MachineState(BaseModel):
@@ -67,6 +68,7 @@ class OlympusState(BaseModel):
     weather: WeatherState | None = None
     calendar: CalendarState | None = None
     time_policy: TimePolicyState
+    football: FootballState | None = None
     media: MediaState | None = None
     core_host: CoreHostState | None = None
     network: NetworkState | None = None

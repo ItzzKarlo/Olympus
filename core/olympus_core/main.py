@@ -11,6 +11,7 @@ from olympus_core.display.hub import DisplayHub
 from olympus_core.integrations.spotify import SpotifyApi, SpotifyCollector
 from olympus_core.integrations.weather import OpenMeteoApi, WeatherCollector
 from olympus_core.integrations.calendar import CalendarCollector, GoogleCalendarApi
+from olympus_core.integrations.football import ApiFootballProvider, FixtureFootballProvider, FootballCollector
 from olympus_core.monitoring.config import load_monitoring_config
 from olympus_core.monitoring.runtime import MonitoringRuntime
 from olympus_core.models.agent import RegisteredAgent
@@ -18,6 +19,7 @@ from olympus_core.models.media import MediaState
 from olympus_core.models.gameplay import GameplayEvent
 from olympus_core.models.weather import WeatherState
 from olympus_core.models.calendar import CalendarSnapshot
+from olympus_core.models.football import FootballDisplayEvent, FootballState
 from olympus_core.models.state import OlympusState
 from olympus_core.services.media import MediaStateStore
 from olympus_core.services.events import EventService
@@ -26,6 +28,7 @@ from olympus_core.services.state import StateService
 from olympus_core.services.gameplay import GameplayEventService
 from olympus_core.services.ambient import CalendarStateStore, WeatherStateStore
 from olympus_core.services.time_policy import TimePolicyService
+from olympus_core.services.football import FootballStateStore
 from olympus_core.websocket.agents import handle_agent_socket
 from olympus_core.websocket.display import handle_display_socket
 
@@ -36,6 +39,7 @@ core_settings = load_core_config()
 media_store = MediaStateStore()
 weather_store = WeatherStateStore()
 calendar_store = CalendarStateStore(core_settings.timezone)
+football_store = FootballStateStore()
 time_policy_service = TimePolicyService(core_settings.night, core_settings.timezone)
 monitoring_store = MonitoringStore()
 event_service = EventService()
@@ -48,6 +52,7 @@ state_service = StateService(
     weather=weather_store,
     calendar=calendar_store,
     time_policy=time_policy_service,
+    football=football_store,
 )
 display_hub = DisplayHub()
 gameplay_service = GameplayEventService()
@@ -69,6 +74,11 @@ async def update_weather_state(weather: WeatherState) -> None:
 
 async def update_calendar_state(calendar: CalendarSnapshot) -> None:
     calendar_store.update(calendar)
+    await publish_display_state()
+
+
+async def update_football_state(football: FootballState) -> None:
+    football_store.update(football)
     await publish_display_state()
 
 
@@ -94,6 +104,10 @@ async def publish_time_policy_transitions() -> None:
 
 
 async def publish_gameplay_event(event: GameplayEvent) -> None:
+    await display_hub.broadcast_event(event)
+
+
+async def publish_football_event(event: FootballDisplayEvent) -> None:
     await display_hub.broadcast_event(event)
 
 
@@ -166,6 +180,28 @@ async def lifespan(_app: FastAPI):
     else:
         logger.info("Calendar collector disabled")
 
+    football_collector: FootballCollector | None = None
+    football_task: asyncio.Task[None] | None = None
+    if core_settings.football.configured:
+        football_provider = (
+            FixtureFootballProvider(core_settings.football)
+            if core_settings.football.provider == "fixture"
+            else ApiFootballProvider(core_settings.football)
+        )
+        football_collector = FootballCollector(
+            core_settings.football,
+            football_provider,
+            update_football_state,
+            publish_football_event,
+        )
+        football_task = asyncio.create_task(
+            football_collector.run(), name="football-collector"
+        )
+    elif core_settings.football.enabled:
+        logger.warning("Football collector disabled because provider configuration or API key is incomplete")
+    else:
+        logger.info("Football collector disabled")
+
     try:
         yield
     finally:
@@ -184,6 +220,9 @@ async def lifespan(_app: FastAPI):
         if time_policy_task is not None:
             time_policy_task.cancel()
             await asyncio.gather(time_policy_task, return_exceptions=True)
+        if football_collector is not None and football_task is not None:
+            football_collector.stop()
+            await football_task
         await monitoring.stop()
 
 

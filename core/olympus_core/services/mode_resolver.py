@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from olympus_core.models.agent import RegisteredAgent
 from olympus_core.models.media import MediaState
 from olympus_core.models.telemetry import ActivityMode
+from olympus_core.models.football import MatchdayContext, MatchPhase
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,7 +20,15 @@ class ModeResolver:
         agents: list[RegisteredAgent],
         media: MediaState | None,
         night_active: bool = False,
+        matchday: MatchdayContext | None = None,
     ) -> ModeResolution:
+        if matchday is not None and matchday.active and matchday.phase in {
+            MatchPhase.LIVE,
+            MatchPhase.HALF_TIME,
+            MatchPhase.SUSPENDED,
+        }:
+            return ModeResolution(ActivityMode.MATCHDAY)
+
         gaming_agents = [
             agent
             for agent in agents
@@ -49,6 +58,12 @@ class ModeResolver:
             return ModeResolution(
                 ActivityMode.DEVELOPMENT, development_agent.agent_id
             )
+
+        if matchday is not None and matchday.active and matchday.phase in {
+            MatchPhase.PRE_MATCH,
+            MatchPhase.POST_MATCH,
+        }:
+            return ModeResolution(ActivityMode.MATCHDAY)
 
         if (
             media is not None

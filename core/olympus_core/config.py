@@ -100,11 +100,51 @@ class NightSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class FootballMatchdaySettings:
+    pre_match_minutes: int = 60
+    post_match_minutes: int = 20
+
+
+@dataclass(frozen=True, slots=True)
+class FootballSettings:
+    enabled: bool = False
+    provider: str = "api-football"
+    team_id: str = "157"
+    tracked_id: str = "bayern"
+    team_name: str = "FC Bayern München"
+    team_short_name: str = "Bayern"
+    team_code: str = "FCB"
+    timezone: str = "UTC"
+    api_key: str | None = None
+    fixture_path: str | None = None
+    matchday: FootballMatchdaySettings = FootballMatchdaySettings()
+    poll_upcoming_seconds: float = 1_800.0
+    poll_near_match_seconds: float = 300.0
+    poll_pre_match_seconds: float = 60.0
+    poll_live_seconds: float = 15.0
+    poll_half_time_seconds: float = 30.0
+    poll_post_match_seconds: float = 60.0
+    live_stale_seconds: float = 60.0
+    unavailable_seconds: float = 900.0
+
+    @property
+    def configured(self) -> bool:
+        if not self.enabled or not self.team_id:
+            return False
+        return (
+            self.provider == "api-football" and bool(self.api_key)
+        ) or (
+            self.provider == "fixture" and bool(self.fixture_path)
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class CoreSettings:
     timezone: str = "UTC"
     weather: WeatherSettings = WeatherSettings()
     calendar: CalendarSettings = CalendarSettings()
     night: NightSettings = NightSettings()
+    football: FootballSettings = FootballSettings()
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -176,6 +216,8 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
     weather_data = _mapping(data.get("weather"))
     calendar_data = _mapping(data.get("calendar"))
     night_data = _mapping(data.get("night"))
+    football_data = _mapping(data.get("football"))
+    matchday_data = _mapping(football_data.get("matchday"))
     weather_timezone = _timezone(weather_data.get("timezone"), timezone)
     calendar_timezone = _timezone(calendar_data.get("timezone"), timezone)
     weather_poll = _positive_float(
@@ -224,6 +266,46 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
             weekend_start=_clock_time(night_data.get("weekend_start"), "night.weekend_start", time(0, 0)),
             end=_clock_time(night_data.get("end"), "night.end", time(7, 30)),
             weekend_days=_weekend_days(night_data.get("weekend_days")),
+        ),
+        football=FootballSettings(
+            enabled=bool(football_data.get("enabled", False)),
+            provider=str(football_data.get("provider", "api-football")).strip().lower(),
+            team_id=str(football_data.get("team_id", "157")).strip(),
+            tracked_id=str(football_data.get("tracked_id", "bayern")).strip() or "bayern",
+            team_name=str(football_data.get("team_name", "FC Bayern München")).strip() or "FC Bayern München",
+            team_short_name=str(football_data.get("team_short_name", "Bayern")).strip() or "Bayern",
+            team_code=str(football_data.get("team_code", "FCB")).strip() or "FCB",
+            timezone=_timezone(football_data.get("timezone"), timezone),
+            api_key=os.getenv("OLYMPUS_FOOTBALL_API_KEY") or None,
+            fixture_path=os.getenv("OLYMPUS_FOOTBALL_FIXTURE_PATH") or None,
+            matchday=FootballMatchdaySettings(
+                pre_match_minutes=_positive_int(matchday_data.get("pre_match_minutes"), 60),
+                post_match_minutes=_positive_int(matchday_data.get("post_match_minutes"), 20),
+            ),
+            poll_upcoming_seconds=_positive_float(
+                str(football_data.get("poll_upcoming_minutes")) if football_data.get("poll_upcoming_minutes") is not None else None,
+                30.0,
+            ) * 60,
+            poll_near_match_seconds=_positive_float(
+                str(football_data.get("poll_near_match_minutes")) if football_data.get("poll_near_match_minutes") is not None else None,
+                5.0,
+            ) * 60,
+            poll_pre_match_seconds=_positive_float(
+                str(football_data.get("poll_pre_match_seconds")) if football_data.get("poll_pre_match_seconds") is not None else None,
+                60.0,
+            ),
+            poll_live_seconds=_positive_float(
+                str(football_data.get("poll_live_seconds")) if football_data.get("poll_live_seconds") is not None else None,
+                15.0,
+            ),
+            poll_half_time_seconds=_positive_float(
+                str(football_data.get("poll_half_time_seconds")) if football_data.get("poll_half_time_seconds") is not None else None,
+                30.0,
+            ),
+            poll_post_match_seconds=_positive_float(
+                str(football_data.get("poll_post_match_seconds")) if football_data.get("poll_post_match_seconds") is not None else None,
+                60.0,
+            ),
         ),
     )
 

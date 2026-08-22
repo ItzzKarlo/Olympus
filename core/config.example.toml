@@ -14,6 +14,29 @@ weekend_start = "00:00"
 end = "07:30"
 weekend_days = ["friday", "saturday"]
 
+[football]
+enabled = false
+provider = "api-football"
+# Development simulation: set provider = "fixture" and configure
+# OLYMPUS_FOOTBALL_FIXTURE_PATH in .env.
+# API-Football provider team ID for FC Bayern München.
+team_id = "157"
+tracked_id = "bayern"
+team_name = "FC Bayern München"
+team_short_name = "Bayern"
+team_code = "FCB"
+timezone = "Europe/Berlin"
+poll_upcoming_minutes = 30
+poll_near_match_minutes = 5
+poll_pre_match_seconds = 60
+poll_live_seconds = 15
+poll_half_time_seconds = 30
+poll_post_match_seconds = 60
+
+[football.matchday]
+pre_match_minutes = 60
+post_match_minutes = 20
+
 [weather]
 enabled = false
 # Configure the fixed home location; Olympus never uses browser/IP geolocation.
