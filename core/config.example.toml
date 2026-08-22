@@ -5,6 +5,15 @@ core_host_poll_seconds = 5
 # IANA timezone used by the room display and calendar interpretation.
 timezone = "Europe/Berlin"
 
+[night]
+enabled = true
+# Midnight starts belong to the end of the named evening: Friday 00:00 means
+# the transition from Friday night into Saturday morning.
+weekday_start = "22:00"
+weekend_start = "00:00"
+end = "07:30"
+weekend_days = ["friday", "saturday"]
+
 [weather]
 enabled = false
 # Configure the fixed home location; Olympus never uses browser/IP geolocation.

@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone as datetime_timezone
+from collections.abc import Callable
 
 from olympus_core.agents.registry import AgentRegistry
 from olympus_core.models.state import DisplayState, MachineState, OlympusState
@@ -8,6 +9,8 @@ from olympus_core.services.gaming import GamingSessionService
 from olympus_core.services.mode_resolver import ModeResolver
 from olympus_core.services.monitoring_store import MonitoringStore
 from olympus_core.services.ambient import CalendarStateStore, WeatherStateStore
+from olympus_core.services.time_policy import TimePolicyService
+from olympus_core.config import NightSettings
 
 
 class StateService:
@@ -24,6 +27,8 @@ class StateService:
         timezone: str = "UTC",
         weather: WeatherStateStore | None = None,
         calendar: CalendarStateStore | None = None,
+        time_policy: TimePolicyService | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._registry = registry
         self._media = media or MediaStateStore()
@@ -34,11 +39,15 @@ class StateService:
         self._timezone = timezone
         self._weather = weather or WeatherStateStore()
         self._calendar = calendar or CalendarStateStore(timezone)
+        self._time_policy = time_policy or TimePolicyService(NightSettings(enabled=False), timezone)
+        self._clock = clock or (lambda: datetime.now(datetime_timezone.utc))
 
     def current(self) -> OlympusState:
         agents = self._registry.get_all()
+        now = self._clock()
         media = self._media.get()
-        resolution = self._resolver.resolve(agents, media)
+        time_policy = self._time_policy.evaluate(now)
+        resolution = self._resolver.resolve(agents, media, time_policy.is_night)
         gaming = self._gaming.update(resolution, agents)
 
         return OlympusState(
@@ -46,7 +55,8 @@ class StateService:
             active_device=resolution.active_device,
             timezone=self._timezone,
             weather=self._weather.get(),
-            calendar=self._calendar.get(),
+            calendar=self._calendar.get(now),
+            time_policy=time_policy,
             machines={
                 agent.agent_id: MachineState(
                     agent_id=agent.agent_id,
@@ -77,5 +87,5 @@ class StateService:
         state = self.current()
         return DisplayState(
             **state.model_dump(),
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(datetime_timezone.utc),
         )

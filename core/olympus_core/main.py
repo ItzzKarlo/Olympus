@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 import asyncio
+from datetime import datetime, timezone
 import logging
 
 from fastapi import FastAPI, WebSocket
@@ -24,6 +25,7 @@ from olympus_core.services.monitoring_store import MonitoringStore
 from olympus_core.services.state import StateService
 from olympus_core.services.gameplay import GameplayEventService
 from olympus_core.services.ambient import CalendarStateStore, WeatherStateStore
+from olympus_core.services.time_policy import TimePolicyService
 from olympus_core.websocket.agents import handle_agent_socket
 from olympus_core.websocket.display import handle_display_socket
 
@@ -34,6 +36,7 @@ core_settings = load_core_config()
 media_store = MediaStateStore()
 weather_store = WeatherStateStore()
 calendar_store = CalendarStateStore(core_settings.timezone)
+time_policy_service = TimePolicyService(core_settings.night, core_settings.timezone)
 monitoring_store = MonitoringStore()
 event_service = EventService()
 state_service = StateService(
@@ -44,6 +47,7 @@ state_service = StateService(
     timezone=core_settings.timezone,
     weather=weather_store,
     calendar=calendar_store,
+    time_policy=time_policy_service,
 )
 display_hub = DisplayHub()
 gameplay_service = GameplayEventService()
@@ -75,6 +79,20 @@ async def publish_ambient_time_progression() -> None:
             await publish_display_state()
 
 
+async def publish_time_policy_transitions() -> None:
+    while True:
+        policy = time_policy_service.evaluate()
+        transition = policy.next_transition_at
+        if transition is None:
+            return
+        delay = max(
+            0.25,
+            (transition.astimezone(timezone.utc) - datetime.now(timezone.utc)).total_seconds() + 0.05,
+        )
+        await asyncio.sleep(delay)
+        await publish_display_state()
+
+
 async def publish_gameplay_event(event: GameplayEvent) -> None:
     await display_hub.broadcast_event(event)
 
@@ -88,6 +106,11 @@ async def lifespan(_app: FastAPI):
         publish_display_state,
     )
     monitoring.start()
+    time_policy_task: asyncio.Task[None] | None = None
+    if core_settings.night.enabled:
+        time_policy_task = asyncio.create_task(
+            publish_time_policy_transitions(), name="time-policy-transitions"
+        )
     settings = SpotifySettings.from_environment()
     collector: SpotifyCollector | None = None
     collector_task: asyncio.Task[None] | None = None
@@ -158,6 +181,9 @@ async def lifespan(_app: FastAPI):
         if ambient_tick_task is not None:
             ambient_tick_task.cancel()
             await asyncio.gather(ambient_tick_task, return_exceptions=True)
+        if time_policy_task is not None:
+            time_policy_task.cancel()
+            await asyncio.gather(time_policy_task, return_exceptions=True)
         await monitoring.stop()
 
 

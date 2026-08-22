@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import time
 import os
 from pathlib import Path
 import logging
@@ -90,10 +91,20 @@ class CalendarSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class NightSettings:
+    enabled: bool = True
+    weekday_start: time = time(22, 0)
+    weekend_start: time = time(0, 0)
+    end: time = time(7, 30)
+    weekend_days: tuple[int, ...] = (4, 5)
+
+
+@dataclass(frozen=True, slots=True)
 class CoreSettings:
     timezone: str = "UTC"
     weather: WeatherSettings = WeatherSettings()
     calendar: CalendarSettings = CalendarSettings()
+    night: NightSettings = NightSettings()
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -121,11 +132,50 @@ def _positive_int(value: Any, default: int) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else default
 
 
+WEEKDAYS = {
+    "monday": 0,
+    "tuesday": 1,
+    "wednesday": 2,
+    "thursday": 3,
+    "friday": 4,
+    "saturday": 5,
+    "sunday": 6,
+}
+
+
+def _clock_time(value: Any, setting: str, default: time) -> time:
+    if value is None:
+        return default
+    if not isinstance(value, str) or len(value) != 5 or value[2] != ":":
+        raise ValueError(f"{setting} must use HH:MM")
+    try:
+        hour, minute = (int(part) for part in value.split(":"))
+        return time(hour, minute)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"{setting} must be a valid 24-hour HH:MM time") from error
+
+
+def _weekend_days(value: Any) -> tuple[int, ...]:
+    if value is None:
+        return (4, 5)
+    if not isinstance(value, list):
+        raise ValueError("night.weekend_days must be a list of weekday names")
+    days: list[int] = []
+    for item in value:
+        key = item.strip().lower() if isinstance(item, str) else ""
+        if key not in WEEKDAYS:
+            raise ValueError(f"Invalid night weekend day: {item!r}")
+        if WEEKDAYS[key] not in days:
+            days.append(WEEKDAYS[key])
+    return tuple(days)
+
+
 def parse_core_config(data: dict[str, Any]) -> CoreSettings:
     olympus = _mapping(data.get("olympus"))
     timezone = _timezone(olympus.get("timezone"))
     weather_data = _mapping(data.get("weather"))
     calendar_data = _mapping(data.get("calendar"))
+    night_data = _mapping(data.get("night"))
     weather_timezone = _timezone(weather_data.get("timezone"), timezone)
     calendar_timezone = _timezone(calendar_data.get("timezone"), timezone)
     weather_poll = _positive_float(
@@ -167,6 +217,13 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
             client_id=os.getenv("OLYMPUS_GOOGLE_CLIENT_ID") or None,
             client_secret=os.getenv("OLYMPUS_GOOGLE_CLIENT_SECRET") or None,
             refresh_token=os.getenv("OLYMPUS_GOOGLE_REFRESH_TOKEN") or None,
+        ),
+        night=NightSettings(
+            enabled=bool(night_data.get("enabled", True)),
+            weekday_start=_clock_time(night_data.get("weekday_start"), "night.weekday_start", time(22, 0)),
+            weekend_start=_clock_time(night_data.get("weekend_start"), "night.weekend_start", time(0, 0)),
+            end=_clock_time(night_data.get("end"), "night.end", time(7, 30)),
+            weekend_days=_weekend_days(night_data.get("weekend_days")),
         ),
     )
 

@@ -8,6 +8,7 @@ from olympus_core.models.integrations import IntegrationSnapshot
 
 class ActivityMode(str, Enum):
     IDLE = "idle"
+    NIGHT = "night"
     DEVELOPMENT = "development"
     GAMING = "gaming"
     MEDIA = "media"

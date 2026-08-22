@@ -25,6 +25,7 @@ from olympus_core.models.integrations import IntegrationObserver
 from olympus_core.models.minecraft import MinecraftState
 from olympus_core.models.weather import WeatherState
 from olympus_core.models.calendar import CalendarState
+from olympus_core.models.time_policy import TimePolicyState
 
 
 class MachineState(BaseModel):
@@ -65,6 +66,7 @@ class OlympusState(BaseModel):
     timezone: str = "UTC"
     weather: WeatherState | None = None
     calendar: CalendarState | None = None
+    time_policy: TimePolicyState
     media: MediaState | None = None
     core_host: CoreHostState | None = None
     network: NetworkState | None = None

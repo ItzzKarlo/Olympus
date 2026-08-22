@@ -18,6 +18,7 @@ class ModeResolver:
         self,
         agents: list[RegisteredAgent],
         media: MediaState | None,
+        night_active: bool = False,
     ) -> ModeResolution:
         gaming_agents = [
             agent
@@ -57,4 +58,4 @@ class ModeResolver:
         ):
             return ModeResolution(ActivityMode.MEDIA)
 
-        return ModeResolution(ActivityMode.IDLE)
+        return ModeResolution(ActivityMode.NIGHT if night_active else ActivityMode.IDLE)
