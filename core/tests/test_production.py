@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from contextlib import closing
 import os
 from pathlib import Path
 import sqlite3
@@ -73,7 +74,9 @@ class BackupTests(unittest.TestCase):
             )
             self.assertEqual(created.name, "core-20260823-080910.db")
             self.assertEqual(created.stat().st_mode & 0o777, 0o600)
-            with sqlite3.connect(created) as connection:
+            self.assertFalse(Path(f"{created}.tmp-wal").exists())
+            self.assertFalse(Path(f"{created}.tmp-shm").exists())
+            with closing(sqlite3.connect(created)) as connection:
                 self.assertEqual(connection.execute("PRAGMA integrity_check").fetchone()[0], "ok")
                 self.assertEqual(
                     connection.execute(

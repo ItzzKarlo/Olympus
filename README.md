@@ -96,7 +96,7 @@ machine Agent:
 Minecraft + Fabric observer → localhost Agent → Core → Display
 ```
 
-Olympus v0.13 implements this full local path. Agents own device-specific
+Olympus v0.14 implements this full local path. Agents own device-specific
 observation, Core owns interpretation and monitoring, and the Display consumes
 only Core's normalized state.
 
@@ -138,6 +138,10 @@ Core exposes:
 - `GET /api/state` — interpreted Olympus mode and machine state
 - `WS /ws/agents` — persistent agent connection
 - `WS /ws/display` — live interpreted state for displays
+
+For the unattended Raspberry Pi production deployment, including the compiled
+same-origin Display, safe backups, health watchdog, and optional Cage/Chromium
+kiosk, see [Hermes production deployment](docs/hermes-deployment.md).
 
 High-frequency observations remain intentionally in memory. Durable device trust,
 incident lifecycle history, and short News presentation memory live in a small
@@ -781,7 +785,8 @@ defaults to a seven-day lookahead and five-minute polling.
 
 ## Install the native Agent
 
-Olympus v0.13 packages the Agent as a self-contained, per-user application for
+Olympus v0.13 introduced the self-contained, per-user Agent application retained
+in v0.14 for
 Windows x86_64, macOS arm64, and Linux x86_64. Python is not required on the
 target machine. Core and Display remain source deployments in this milestone.
 
@@ -799,7 +804,7 @@ before installing autostart:
 
 The builds are currently unsigned. Windows SmartScreen or macOS Gatekeeper may
 therefore ask for confirmation on first launch. Olympus does not claim code
-signing, notarization, or an automatic updater in v0.13.
+signing, notarization, or an automatic updater in v0.14.
 The current macOS process-based activity detection does not require Accessibility
 permission, and the Agent does not request it.
 
@@ -1095,8 +1100,9 @@ When the Display is not running on Hermes itself, configure the Core endpoint:
 VITE_OLYMPUS_CORE_WS=ws://10.10.0.10:8000/ws/display npm run dev
 ```
 
-For v0.13, the Display is a browser-based development UI. It is not yet packaged
-or deployed as a kiosk.
+For v0.14, the same Display remains available through Vite during development and
+is compiled into static assets served directly by Core in production. Hermes can
+launch those assets through the optional minimal Cage/Chromium kiosk.
 
 ## Test
 
@@ -1119,13 +1125,17 @@ python -m unittest discover -s tests
 cd ../../display
 npm run build
 
-cd ../integrations/minecraft-fabric
+cd ..
+scripts/hermes/build-release.sh --skip-node-install
+
+cd integrations/minecraft-fabric
 gradle build
 ```
 
-The current milestone packages only the native Agent. It does not include Core or
-Display packaging, Docker, kiosk deployment, automatic updates, application
-control, audio/RGB output, physical display control, or a Web administration
-surface. FPS remains an optional external Windows input, and unavailable metrics
-are omitted. macOS and Windows CPU temperature remain unavailable unless a
-future reliable local provider is added.
+The current milestone adds Hermes production release tooling and an optional
+minimal kiosk without packaging Core as a native binary or adding Docker, a full
+desktop, automatic online updates, application control, audio/RGB output,
+physical display power control, or a Web administration surface. FPS remains an
+optional external Windows input, and unavailable metrics are omitted. macOS and
+Windows CPU temperature remain unavailable unless a future reliable local
+provider is added.

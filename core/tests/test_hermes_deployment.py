@@ -37,6 +37,43 @@ class HermesScriptTests(unittest.TestCase):
         self.assertIn("http://127.0.0.1:8000/", result.stdout)
         self.assertNotIn("--no-sandbox", result.stdout)
 
+    def test_kiosk_detects_monitor_and_bounds_core_wait_in_test_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            drm = Path(directory) / "card0-HDMI-A-1"
+            drm.mkdir()
+            status = drm / "status"
+            status.write_text("disconnected\n", encoding="ascii")
+            environment = {
+                **os.environ,
+                "CAGE_BIN": "/usr/bin/cage",
+                "BROWSER_BIN": "/snap/bin/chromium",
+                "OLYMPUS_DRM_ROOT": directory,
+            }
+            disconnected = subprocess.run(
+                [HERMES_SCRIPTS / "start-kiosk.sh", "--check-monitor"],
+                env=environment,
+            )
+            self.assertNotEqual(disconnected.returncode, 0)
+            status.write_text("connected\n", encoding="ascii")
+            connected = subprocess.run(
+                [HERMES_SCRIPTS / "start-kiosk.sh", "--check-monitor"],
+                env=environment,
+            )
+            self.assertEqual(connected.returncode, 0)
+            bounded = subprocess.run(
+                [HERMES_SCRIPTS / "start-kiosk.sh"],
+                env={
+                    **environment,
+                    "CURL_BIN": "/usr/bin/false",
+                    "OLYMPUS_KIOSK_WAIT_SECONDS": "0",
+                    "OLYMPUS_KIOSK_MAX_WAIT_ATTEMPTS": "2",
+                },
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(bounded.returncode, 75)
+            self.assertIn("wait limit reached", bounded.stderr)
+
     def test_installer_dry_run_resolves_versioned_paths_without_writing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             release = Path(directory) / "release"

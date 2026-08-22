@@ -30,7 +30,14 @@ else
     echo "FAIL  Core database is not readable"
     failures=$((failures + 1))
 fi
-if [ -w "$ROOT/var/lib/olympus" ]; then
+if [ -z "$ROOT" ] && command -v runuser >/dev/null 2>&1 && id olympus >/dev/null 2>&1; then
+    if runuser -u olympus -- test -w /var/lib/olympus; then
+        echo "PASS  Core state directory writable by olympus"
+    else
+        echo "FAIL  Core state directory is not writable by olympus"
+        failures=$((failures + 1))
+    fi
+elif [ -w "$ROOT/var/lib/olympus" ]; then
     echo "PASS  Core state directory writable by current diagnostic user"
 else
     echo "WARN  Core state directory is not writable by current diagnostic user"
@@ -56,9 +63,12 @@ else
     echo "INFO  rooted filesystem inspection; live service probes skipped"
 fi
 
-for command in cage chromium chromium-browser; do
-    command -v "$command" >/dev/null 2>&1 && echo "PASS  command available: $command"
-done
+command -v cage >/dev/null 2>&1 && echo "PASS  Cage available" || echo "WARN  Cage unavailable (kiosk optional)"
+if command -v chromium >/dev/null 2>&1 || command -v chromium-browser >/dev/null 2>&1; then
+    echo "PASS  Chromium available"
+else
+    echo "WARN  Chromium unavailable (kiosk optional)"
+fi
 [ -e "$ROOT/dev/dri/card0" ] && echo "PASS  DRM card present" || echo "INFO  no DRM card currently visible"
 df -Pk "${ROOT:-/}" | awk 'NR == 2 {print "INFO  disk free: " $4 " KiB"}'
 

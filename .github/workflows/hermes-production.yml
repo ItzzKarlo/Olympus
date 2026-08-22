@@ -7,6 +7,7 @@ on:
       - "core/**"
       - "display/**"
       - "deploy/hermes/**"
+      - "docs/hermes-deployment.md"
       - "scripts/hermes/**"
       - ".github/workflows/hermes-production.yml"
 

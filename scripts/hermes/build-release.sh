@@ -22,6 +22,7 @@ cp "$ROOT/core/requirements.txt" "$RELEASE/core/"
 cp -R "$ROOT/display/dist/." "$RELEASE/display/"
 cp -R "$ROOT/deploy/hermes/." "$RELEASE/deploy/"
 cp -R "$ROOT/scripts/hermes" "$RELEASE/scripts/"
+cp "$ROOT/docs/hermes-deployment.md" "$RELEASE/README-HERMES.md"
 printf '%s\n' "$VERSION" > "$RELEASE/VERSION"
 find "$RELEASE" -type d -name __pycache__ -prune -exec rm -rf {} +
 find "$RELEASE" -type f \( -name '*.pyc' -o -name '.DS_Store' \) -delete

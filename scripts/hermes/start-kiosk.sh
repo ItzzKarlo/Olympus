@@ -3,6 +3,10 @@ set -eu
 
 CORE_URL=${OLYMPUS_CORE_URL:-http://127.0.0.1:8000}
 PROFILE=${OLYMPUS_KIOSK_PROFILE:-/home/olympus-display/.config/olympus-chromium}
+DRM_ROOT=${OLYMPUS_DRM_ROOT:-/sys/class/drm}
+WAIT_SECONDS=${OLYMPUS_KIOSK_WAIT_SECONDS:-3}
+MAX_WAIT_ATTEMPTS=${OLYMPUS_KIOSK_MAX_WAIT_ATTEMPTS:-0}
+CURL=${CURL_BIN:-curl}
 CAGE=${CAGE_BIN:-}
 BROWSER=${BROWSER_BIN:-}
 
@@ -17,13 +21,8 @@ if [ -z "$CAGE" ] || [ -z "$BROWSER" ]; then
     exit 1
 fi
 
-if [ "${1:-}" = "--print-command" ] || [ "${OLYMPUS_KIOSK_DRY_RUN:-0}" = "1" ]; then
-    printf '%s\n' "$CAGE -d -s -x -- $BROWSER --ozone-platform=wayland --kiosk --no-first-run --noerrdialogs --disable-session-crashed-bubble --disable-translate --overscroll-history-navigation=0 --user-data-dir=$PROFILE $CORE_URL/"
-    exit 0
-fi
-
 monitor_connected() {
-    for status in /sys/class/drm/card*-*/status; do
+    for status in "$DRM_ROOT"/card*-*/status; do
         [ -f "$status" ] || continue
         if grep -qx connected "$status"; then
             return 0
@@ -32,14 +31,29 @@ monitor_connected() {
     return 1
 }
 
+if [ "${1:-}" = "--print-command" ] || [ "${OLYMPUS_KIOSK_DRY_RUN:-0}" = "1" ]; then
+    printf '%s\n' "$CAGE -d -s -x -- $BROWSER --ozone-platform=wayland --kiosk --no-first-run --noerrdialogs --disable-session-crashed-bubble --disable-translate --overscroll-history-navigation=0 --user-data-dir=$PROFILE $CORE_URL/"
+    exit 0
+fi
+if [ "${1:-}" = "--check-monitor" ]; then
+    monitor_connected
+    exit $?
+fi
+
 echo "Olympus kiosk waiting for an attached DRM display."
 while ! monitor_connected; do
     sleep 10
 done
 
 echo "Olympus kiosk waiting for local Core at $CORE_URL/health."
-until curl --fail --silent --max-time 3 "$CORE_URL/health" >/dev/null; do
-    sleep 3
+attempts=0
+until "$CURL" --fail --silent --max-time 3 "$CORE_URL/health" >/dev/null; do
+    attempts=$((attempts + 1))
+    if [ "$MAX_WAIT_ATTEMPTS" -gt 0 ] && [ "$attempts" -ge "$MAX_WAIT_ATTEMPTS" ]; then
+        echo "Olympus kiosk Core wait limit reached." >&2
+        exit 75
+    fi
+    sleep "$WAIT_SECONDS"
 done
 
 if [ -z "${XDG_RUNTIME_DIR:-}" ]; then

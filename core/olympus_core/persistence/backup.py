@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from contextlib import closing
 import os
 from pathlib import Path
 import sqlite3
@@ -27,22 +28,31 @@ def create_backup(
         )
         suffix += 1
     temporary = target.with_suffix(".db.tmp")
+    temporary_sidecars = (
+        Path(f"{temporary}-wal"),
+        Path(f"{temporary}-shm"),
+    )
     source_uri = f"file:{quote(source_path.as_posix())}?mode=ro"
     try:
-        with sqlite3.connect(source_uri, uri=True, timeout=10) as source:
-            with sqlite3.connect(temporary) as backup:
+        with closing(sqlite3.connect(source_uri, uri=True, timeout=10)) as source:
+            with closing(sqlite3.connect(temporary)) as backup:
                 source.backup(backup)
                 integrity = backup.execute("PRAGMA integrity_check").fetchone()[0]
                 if integrity != "ok":
                     raise sqlite3.DatabaseError(
                         f"SQLite backup integrity check failed: {integrity}"
                     )
+                backup.execute("PRAGMA journal_mode = DELETE")
         if os.name != "nt":
             temporary.chmod(0o600)
         temporary.replace(target)
     except Exception:
         temporary.unlink(missing_ok=True)
+        for sidecar in temporary_sidecars:
+            sidecar.unlink(missing_ok=True)
         raise
+    for sidecar in temporary_sidecars:
+        sidecar.unlink(missing_ok=True)
     return target
 
 

@@ -71,6 +71,13 @@ fi
 
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required." >&2; exit 1; }
 command -v curl >/dev/null 2>&1 || { echo "curl is required." >&2; exit 1; }
+if [ "$ENABLE_KIOSK" -eq 1 ]; then
+    command -v cage >/dev/null 2>&1 || { echo "Cage is required before enabling kiosk." >&2; exit 1; }
+    if ! command -v chromium >/dev/null 2>&1 && ! command -v chromium-browser >/dev/null 2>&1; then
+        echo "Chromium is required before enabling kiosk." >&2
+        exit 1
+    fi
+fi
 
 if ! id olympus >/dev/null 2>&1; then
     useradd --system --home-dir /var/lib/olympus --shell /usr/sbin/nologin olympus
@@ -126,7 +133,6 @@ if [ "$RELEASE_DIR" != "$TARGET" ]; then
     cp -a "$RELEASE_DIR/." "$TARGET/"
 fi
 python3 -m venv "$TARGET/core/.venv"
-"$TARGET/core/.venv/bin/python" -m pip install --upgrade pip
 "$TARGET/core/.venv/bin/python" -m pip install -r "$TARGET/core/requirements.txt"
 chown -R root:root "$TARGET"
 find "$TARGET/scripts" -type f -name '*.sh' -exec chmod 0755 {} +

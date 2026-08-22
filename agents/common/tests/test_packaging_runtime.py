@@ -157,7 +157,7 @@ class RuntimeResilienceTests(unittest.IsolatedAsyncioTestCase):
                     "test",
                     "linux",
                     "test",
-                    "0.13.0",
+                    "0.14.0",
                     lambda: {},
                     stop=stop,
                 ), timeout=1)
@@ -241,7 +241,7 @@ class LoggingAndCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             paths = temporary_paths(Path(directory))
             application = AgentApplication(
-                "linux", "linux", "test", "0.13.0",
+                "linux", "linux", "test", "0.14.0",
                 lambda: {}, paths,
             )
             output = io.StringIO()
@@ -253,7 +253,7 @@ class LoggingAndCliTests(unittest.TestCase):
                 self.assertEqual(run_cli(application, ["version"]), 0)
             parsed = read_config_file(paths.config_path)
             self.assertEqual(parsed["core"]["url"], "wss://hermes/ws/agents")
-            self.assertIn("Olympus Agent 0.13.0", output.getvalue())
+            self.assertIn("Olympus Agent 0.14.0", output.getvalue())
 
 
 if __name__ == "__main__":
