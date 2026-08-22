@@ -2,13 +2,38 @@ from datetime import datetime, timedelta, timezone
 import unittest
 
 from olympus_core.agents.registry import AgentRegistry
+from olympus_core.config import NightSettings
 from olympus_core.services.gaming import GamingSessionService
 from olympus_core.services.state import StateService
+from olympus_core.services.time_policy import TimePolicyService
 from olympus_core.models.integrations import IntegrationObserver, IntegrationSnapshot
 from tests.test_registry import gaming_telemetry, hello, telemetry
 
 
 class GamingSessionTests(unittest.TestCase):
+    def test_policy_boundary_does_not_reset_active_game_session(self) -> None:
+        current = [datetime(2026, 8, 17, 19, 59, tzinfo=timezone.utc)]
+        registry = AgentRegistry()
+        gaming = GamingSessionService(clock=lambda: current[0])
+        state_service = StateService(
+            registry,
+            gaming=gaming,
+            timezone="Europe/Zagreb",
+            time_policy=TimePolicyService(NightSettings(), "Europe/Zagreb"),
+            clock=lambda: current[0],
+        )
+        registry.register(hello("win-test"))
+        registry.update("win-test", gaming_telemetry())
+
+        before = state_service.current()
+        current[0] += timedelta(minutes=2)
+        after = state_service.current()
+
+        self.assertFalse(before.time_policy.is_night)
+        self.assertTrue(after.time_policy.is_night)
+        self.assertEqual(before.mode, after.mode)
+        self.assertEqual(before.gaming.session_started_at, after.gaming.session_started_at)
+
     def test_session_is_stable_until_game_ends_then_restarts(self) -> None:
         current = [datetime(2026, 8, 22, 18, 42, tzinfo=timezone.utc)]
         registry = AgentRegistry()

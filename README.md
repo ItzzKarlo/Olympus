@@ -96,15 +96,19 @@ machine Agent:
 Minecraft + Fabric observer → localhost Agent → Core → Display
 ```
 
-Olympus v0.7 implements this full local path. Agents own device-specific
+Olympus v0.8 implements this full local path. Agents own device-specific
 observation, Core owns interpretation and monitoring, and the Display consumes
 only Core's normalized state.
 
-Primary scene priority remains:
+Activity priority remains:
 
 ```text
-GAMING > DEVELOPMENT > MEDIA > IDLE
+GAMING > DEVELOPMENT > MEDIA
 ```
+
+When no activity is active, Core chooses `NIGHT` during the configured night
+period and `IDLE` during the day. Night is an environmental policy, not another
+user activity.
 
 Alerts do not become another normal mode. They overlay whichever scene is
 already active. When Core confirms recovery, it sends a temporary recovery event
@@ -208,9 +212,9 @@ The relevant transitions are:
 Spotify playing → MEDIA
 IDE active      → DEVELOPMENT overrides MEDIA
 Game active     → GAMING overrides DEVELOPMENT and MEDIA
-Game closes     → DEVELOPMENT, MEDIA, or IDLE from current state
+Game closes     → DEVELOPMENT, MEDIA, NIGHT, or IDLE from current state
 IDE closes      → MEDIA resumes
-Spotify pauses  → IDLE
+Spotify pauses  → NIGHT or IDLE from the current time policy
 ```
 
 Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard),
@@ -271,16 +275,67 @@ events receive restrained emphasis without becoming alerts. Core, Internet,
 target, and service health remain a quiet footer rather than competing with the
 day's context.
 
-Weather and Calendar enrich Idle only. They do not create new modes or change:
+Weather and Calendar enrich the ambient Idle and Night scenes. They do not
+create activity modes or change:
 
 ```text
-GAMING > DEVELOPMENT > MEDIA > IDLE
+GAMING > DEVELOPMENT > MEDIA
 ```
 
 Other scenes continue receiving the global state but deliberately remain
 uncluttered. If either optional source is disabled, its section is omitted. If
 a working source later becomes stale, the last useful data remains briefly with
 a subtle age label; external-data staleness is not an infrastructure alert.
+
+## Night Mode
+
+Night Mode is Olympus' calm, dim fallback when the room has no higher-priority
+activity. Its scene emphasizes the clock and date, then current temperature,
+the next event and tomorrow's short agenda, with system health kept to a quiet
+footer. Missing Weather or Calendar data simply removes that section.
+
+Night is an environmental policy, not an activity mode. Gaming, Development,
+and Media still override the Night scene. While any of those activities remains
+active, its scene identity stays intact and receives a lower-brightness,
+lower-saturation Night adaptation. When the activity ends during the configured
+period, Olympus returns to `NIGHT` instead of `IDLE`.
+
+The default policy is:
+
+```text
+Sunday–Thursday evening   22:00 → 07:30
+Friday–Saturday evening   00:00 → 07:30
+```
+
+Midnight starts belong to the end of the named evening. With the defaults,
+Friday remains day policy through 23:59, transitions to Night at Saturday
+00:00, and returns to day policy at 07:30. Saturday behaves the same way into
+Sunday. All boundaries use the `[olympus]` IANA timezone, including daylight-
+saving transitions; the browser and Core host timezone do not decide policy.
+
+Configure the schedule in the ignored `core/config.toml`:
+
+```toml
+[olympus]
+timezone = "Europe/Berlin"
+
+[night]
+enabled = true
+weekday_start = "22:00"
+weekend_start = "00:00"
+end = "07:30"
+weekend_days = ["friday", "saturday"]
+```
+
+Times must use 24-hour `HH:MM` values and weekend days must be valid weekday
+names. Set `enabled = false` for the v0.7 fallback behavior:
+
+```text
+GAMING > DEVELOPMENT > MEDIA > IDLE
+```
+
+Night currently changes software presentation only. It does not control
+physical monitor brightness, audio, HDMI/display power, or any room hardware.
 
 ## Weather setup
 
@@ -437,11 +492,14 @@ zero values for unavailable hardware metrics.
 Gaming is a normalized activity, not a collection of executable checks inside
 Core. Windows and Linux agents identify a game through small, testable platform
 profiles and report its stable ID and name. Core chooses the active gaming
-machine, tracks the in-memory session start, and applies this priority:
+machine, tracks the in-memory session start, and applies this activity priority:
 
 ```text
-GAMING > DEVELOPMENT > MEDIA > IDLE
+GAMING > DEVELOPMENT > MEDIA
 ```
+
+The inactive fallback remains `NIGHT` or `IDLE` according to Core's time policy;
+crossing a policy boundary does not reset a game session.
 
 The first profiles cover Fortnite, Minecraft, Among Us, Goat Simulator, and Goat
 Simulator 3 where each title can be identified safely. Minecraft matching is
@@ -540,7 +598,7 @@ When the Display is not running on Hermes itself, configure the Core endpoint:
 VITE_OLYMPUS_CORE_WS=ws://10.10.0.10:8000/ws/display npm run dev
 ```
 
-For v0.7, the Display is a browser-based development UI. It is not yet packaged
+For v0.8, the Display is a browser-based development UI. It is not yet packaged
 or deployed as a kiosk.
 
 ## Test
@@ -566,7 +624,7 @@ gradle build
 ```
 
 The current milestone does not include a database, Olympus authentication,
-Docker, kiosk packaging, application control, audio/RGB output, Night Mode,
-Matchday, or News. FPS remains an optional external Windows input, and
+Docker, kiosk packaging, application control, audio/RGB output, physical display
+control, Matchday, or News. FPS remains an optional external Windows input, and
 unavailable metrics are omitted. macOS and Windows CPU temperature remain
 unavailable unless a future reliable local provider is added.
