@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "olympus-minecraft",
+  "version": "${version}",
+  "name": "Olympus Minecraft Observer",
+  "description": "Read-only local Minecraft context for the Olympus machine Agent.",
+  "authors": ["ItzzKarlo"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.itzkarlo.olympus.minecraft.OlympusMinecraftClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~1.21.10",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

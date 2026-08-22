@@ -59,6 +59,7 @@ build/
 
 .vite/
 *.tsbuildinfo
+.gradle/
 
 .env
 .env.local
