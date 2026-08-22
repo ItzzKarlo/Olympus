@@ -4,6 +4,7 @@ from olympus_core.models.agent import RegisteredAgent
 from olympus_core.models.media import MediaState
 from olympus_core.models.telemetry import ActivityMode
 from olympus_core.models.football import MatchdayContext, MatchPhase
+from olympus_core.models.news import NewsImportanceLevel, NewsState
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +22,7 @@ class ModeResolver:
         media: MediaState | None,
         night_active: bool = False,
         matchday: MatchdayContext | None = None,
+        news: NewsState | None = None,
     ) -> ModeResolution:
         if matchday is not None and matchday.active and matchday.phase in {
             MatchPhase.LIVE,
@@ -28,6 +30,14 @@ class ModeResolver:
             MatchPhase.SUSPENDED,
         }:
             return ModeResolution(ActivityMode.MATCHDAY)
+
+        presentation = news.presentation if news is not None else None
+        if (
+            presentation is not None
+            and news.active_story is not None
+            and presentation.level == NewsImportanceLevel.MAJOR
+        ):
+            return ModeResolution(ActivityMode.NEWS)
 
         gaming_agents = [
             agent
@@ -64,6 +74,14 @@ class ModeResolver:
             MatchPhase.POST_MATCH,
         }:
             return ModeResolution(ActivityMode.MATCHDAY)
+
+        if (
+            presentation is not None
+            and news is not None
+            and news.active_story is not None
+            and presentation.level == NewsImportanceLevel.IMPORTANT
+        ):
+            return ModeResolution(ActivityMode.NEWS)
 
         if (
             media is not None

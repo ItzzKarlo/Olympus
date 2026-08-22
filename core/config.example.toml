@@ -51,6 +51,42 @@ post_match_minutes = 20
 watched = []
 rating_change_threshold = 0.25
 
+[news]
+enabled = false
+provider = "rss"
+poll_minutes = 5
+retention_hours = 48
+stale_minutes = 15
+unavailable_minutes = 60
+default_language = "en"
+# Configured regions influence local display relevance; Olympus never uses IP geolocation.
+local_regions = ["DE"]
+
+[news.presentation]
+ambient_limit = 3
+news_scene_seconds = 20
+major_scene_seconds = 45
+cooldown_minutes = 30
+notable_threshold = 0.55
+important_threshold = 0.68
+major_threshold = 0.86
+
+[news.interests]
+technology = 1.1
+germany = 1.2
+world = 1.0
+entertainment = 0.7
+
+# Add reputable public RSS/Atom feeds. URLs live only in local configuration.
+# [[news.feeds]]
+# id = "publisher-world"
+# name = "Publisher World"
+# url = "https://example.com/world.xml"
+# language = "en"
+# region = "DE"
+# topic = "world"
+# trust = 1.0
+
 [weather]
 enabled = false
 # Configure the fixed home location; Olympus never uses browser/IP geolocation.

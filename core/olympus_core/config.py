@@ -152,12 +152,62 @@ class FootballSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class NewsFeedSettings:
+    id: str
+    name: str
+    url: str
+    language: str = "en"
+    trust: float = 1.0
+    region: str | None = None
+    topic: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NewsPresentationSettings:
+    ambient_limit: int = 3
+    news_scene_seconds: float = 20.0
+    major_scene_seconds: float = 45.0
+    cooldown_seconds: float = 1_800.0
+    notable_threshold: float = 0.55
+    important_threshold: float = 0.68
+    major_threshold: float = 0.86
+
+
+@dataclass(frozen=True, slots=True)
+class NewsSettings:
+    enabled: bool = False
+    provider: str = "rss"
+    fixture_path: str | None = None
+    poll_seconds: float = 300.0
+    retention_seconds: float = 172_800.0
+    stale_seconds: float = 900.0
+    unavailable_seconds: float = 3_600.0
+    default_language: str = "en"
+    local_regions: tuple[str, ...] = ("DE",)
+    feeds: tuple[NewsFeedSettings, ...] = ()
+    interests: tuple[tuple[str, float], ...] = ()
+    presentation: NewsPresentationSettings = NewsPresentationSettings()
+
+    @property
+    def configured(self) -> bool:
+        if not self.enabled:
+            return False
+        if self.provider == "fixture":
+            return bool(self.fixture_path)
+        return self.provider == "rss" and bool(self.feeds)
+
+    def interest_weight(self, topic: str) -> float:
+        return dict(self.interests).get(topic, 1.0)
+
+
+@dataclass(frozen=True, slots=True)
 class CoreSettings:
     timezone: str = DEFAULT_TIMEZONE
     weather: WeatherSettings = WeatherSettings()
     calendar: CalendarSettings = CalendarSettings()
     night: NightSettings = NightSettings()
     football: FootballSettings = FootballSettings()
+    news: NewsSettings = NewsSettings()
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -187,6 +237,12 @@ def _positive_int(value: Any, default: int) -> int:
 
 def _nonnegative_int(value: Any, default: int) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else default
+
+
+def _bounded_float(value: Any, default: float, minimum: float, maximum: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return default
+    return min(maximum, max(minimum, float(value)))
 
 
 WEEKDAYS = {
@@ -236,6 +292,9 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
     football_data = _mapping(data.get("football"))
     matchday_data = _mapping(football_data.get("matchday"))
     player_data = _mapping(football_data.get("players"))
+    news_data = _mapping(data.get("news"))
+    news_presentation_data = _mapping(news_data.get("presentation"))
+    news_interests_data = _mapping(news_data.get("interests"))
     weather_timezone = _timezone(weather_data.get("timezone"), timezone)
     calendar_timezone = _timezone(calendar_data.get("timezone"), timezone)
     weather_poll = _positive_float(
@@ -256,6 +315,35 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
         value.strip() for value in raw_watched
         if isinstance(value, str) and value.strip()
     )) if isinstance(raw_watched, list) else ()
+    raw_news_feeds = news_data.get("feeds", [])
+    news_feeds: list[NewsFeedSettings] = []
+    if isinstance(raw_news_feeds, list):
+        for value in raw_news_feeds:
+            feed = _mapping(value)
+            identifier = str(feed.get("id", "")).strip()
+            name = str(feed.get("name", "")).strip()
+            url = str(feed.get("url", "")).strip()
+            if not identifier or not name or not url:
+                continue
+            topic = str(feed.get("topic", "")).strip().lower() or None
+            news_feeds.append(NewsFeedSettings(
+                id=identifier,
+                name=name,
+                url=url,
+                language=str(feed.get("language", news_data.get("default_language", "en"))).strip() or "en",
+                trust=_bounded_float(feed.get("trust"), 1.0, 0.1, 2.0),
+                region=str(feed.get("region", "")).strip().upper() or None,
+                topic=topic,
+            ))
+    raw_regions = news_data.get("local_regions", ["DE"])
+    local_regions = tuple(dict.fromkeys(
+        str(value).strip().upper() for value in raw_regions if str(value).strip()
+    )) if isinstance(raw_regions, list) else ("DE",)
+    interests = tuple(
+        (str(topic).strip().lower(), _bounded_float(weight, 1.0, 0.25, 2.0))
+        for topic, weight in news_interests_data.items()
+        if str(topic).strip()
+    )
 
     return CoreSettings(
         timezone=timezone,
@@ -355,6 +443,49 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
             low_quota_remaining=_nonnegative_int(football_data.get("low_quota_remaining"), 25),
             critical_quota_remaining=_nonnegative_int(football_data.get("critical_quota_remaining"), 5),
             max_history_samples=min(_positive_int(football_data.get("max_history_samples"), 96), 512),
+        ),
+        news=NewsSettings(
+            enabled=bool(news_data.get("enabled", False)),
+            provider=str(news_data.get("provider", "rss")).strip().lower(),
+            fixture_path=os.getenv("OLYMPUS_NEWS_FIXTURE_PATH") or None,
+            poll_seconds=_positive_float(
+                str(news_data.get("poll_minutes")) if news_data.get("poll_minutes") is not None else None,
+                5.0,
+            ) * 60,
+            retention_seconds=_positive_float(
+                str(news_data.get("retention_hours")) if news_data.get("retention_hours") is not None else None,
+                48.0,
+            ) * 3_600,
+            stale_seconds=_positive_float(
+                str(news_data.get("stale_minutes")) if news_data.get("stale_minutes") is not None else None,
+                15.0,
+            ) * 60,
+            unavailable_seconds=_positive_float(
+                str(news_data.get("unavailable_minutes")) if news_data.get("unavailable_minutes") is not None else None,
+                60.0,
+            ) * 60,
+            default_language=str(news_data.get("default_language", "en")).strip() or "en",
+            local_regions=local_regions or ("DE",),
+            feeds=tuple(news_feeds),
+            interests=interests,
+            presentation=NewsPresentationSettings(
+                ambient_limit=min(_positive_int(news_presentation_data.get("ambient_limit"), 3), 5),
+                news_scene_seconds=_positive_float(
+                    str(news_presentation_data.get("news_scene_seconds")) if news_presentation_data.get("news_scene_seconds") is not None else None,
+                    20.0,
+                ),
+                major_scene_seconds=_positive_float(
+                    str(news_presentation_data.get("major_scene_seconds")) if news_presentation_data.get("major_scene_seconds") is not None else None,
+                    45.0,
+                ),
+                cooldown_seconds=_positive_float(
+                    str(news_presentation_data.get("cooldown_minutes")) if news_presentation_data.get("cooldown_minutes") is not None else None,
+                    30.0,
+                ) * 60,
+                notable_threshold=_bounded_float(news_presentation_data.get("notable_threshold"), 0.55, 0, 1),
+                important_threshold=_bounded_float(news_presentation_data.get("important_threshold"), 0.68, 0, 1),
+                major_threshold=_bounded_float(news_presentation_data.get("major_threshold"), 0.86, 0, 1),
+            ),
         ),
     )
 

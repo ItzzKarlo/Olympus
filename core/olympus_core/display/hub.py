@@ -5,6 +5,7 @@ from starlette.websockets import WebSocket
 from olympus_core.models.state import DisplayState
 from olympus_core.models.gameplay import DisplayEventMessage, GameplayEvent
 from olympus_core.models.football import FootballDisplayEvent
+from olympus_core.models.news import NewsDisplayEvent
 
 
 class DisplayHub:
@@ -32,7 +33,7 @@ class DisplayHub:
         payload = state.model_dump(mode="json")
         await self._broadcast_payload(payload)
 
-    async def broadcast_event(self, event: GameplayEvent | FootballDisplayEvent) -> None:
+    async def broadcast_event(self, event: GameplayEvent | FootballDisplayEvent | NewsDisplayEvent) -> None:
         payload = DisplayEventMessage(event=event).model_dump(mode="json")
         await self._broadcast_payload(payload)
 

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from olympus_core.models.monitoring import EventSeverity
 from olympus_core.models.football import FootballDisplayEvent
+from olympus_core.models.news import NewsDisplayEvent
 
 
 class GameplayEventSource(BaseModel):
@@ -24,4 +25,4 @@ class GameplayEvent(BaseModel):
 
 class DisplayEventMessage(BaseModel):
     type: Literal["event"] = "event"
-    event: GameplayEvent | FootballDisplayEvent
+    event: GameplayEvent | FootballDisplayEvent | NewsDisplayEvent

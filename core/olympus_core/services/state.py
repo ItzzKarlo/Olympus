@@ -11,6 +11,7 @@ from olympus_core.services.monitoring_store import MonitoringStore
 from olympus_core.services.ambient import CalendarStateStore, WeatherStateStore
 from olympus_core.services.time_policy import TimePolicyService
 from olympus_core.services.football import FootballStateStore
+from olympus_core.services.news import NewsStateStore
 from olympus_core.config import NightSettings
 
 
@@ -31,6 +32,7 @@ class StateService:
         time_policy: TimePolicyService | None = None,
         clock: Callable[[], datetime] | None = None,
         football: FootballStateStore | None = None,
+        news: NewsStateStore | None = None,
     ) -> None:
         self._registry = registry
         self._media = media or MediaStateStore()
@@ -44,6 +46,7 @@ class StateService:
         self._time_policy = time_policy or TimePolicyService(NightSettings(enabled=False), timezone)
         self._clock = clock or (lambda: datetime.now(datetime_timezone.utc))
         self._football = football or FootballStateStore()
+        self._news = news or NewsStateStore()
 
     def current(self) -> OlympusState:
         agents = self._registry.get_all()
@@ -51,11 +54,13 @@ class StateService:
         media = self._media.get()
         time_policy = self._time_policy.evaluate(now)
         football = self._football.get()
+        news = self._news.get()
         resolution = self._resolver.resolve(
             agents,
             media,
             time_policy.is_night,
             football.matchday if football else None,
+            news,
         )
         gaming = self._gaming.update(resolution, agents)
 
@@ -67,6 +72,7 @@ class StateService:
             calendar=self._calendar.get(now),
             time_policy=time_policy,
             football=football,
+            news=news,
             machines={
                 agent.agent_id: MachineState(
                     agent_id=agent.agent_id,

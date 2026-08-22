@@ -27,6 +27,8 @@ from olympus_core.models.weather import WeatherState
 from olympus_core.models.calendar import CalendarState
 from olympus_core.models.time_policy import TimePolicyState
 from olympus_core.models.football import FootballState
+from olympus_core.models.live_event import LiveEvent
+from olympus_core.models.news import NewsState
 
 
 class MachineState(BaseModel):
@@ -69,6 +71,8 @@ class OlympusState(BaseModel):
     calendar: CalendarState | None = None
     time_policy: TimePolicyState
     football: FootballState | None = None
+    news: NewsState | None = None
+    live_events: list[LiveEvent] = Field(default_factory=list)
     media: MediaState | None = None
     core_host: CoreHostState | None = None
     network: NetworkState | None = None

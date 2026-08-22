@@ -13,6 +13,9 @@ from olympus_core.models.football import (
     MatchPhase,
 )
 from olympus_core.models.telemetry import ActivityMode
+from olympus_core.models.news import (
+    NewsCluster, NewsImportance, NewsImportanceLevel, NewsPresentation, NewsState, NewsTopic,
+)
 from olympus_core.services.media import MediaStateStore
 from olympus_core.services.state import StateService
 from olympus_core.services.time_policy import TimePolicyService
@@ -44,6 +47,21 @@ def matchday(phase: MatchPhase) -> MatchdayContext:
             score=FootballScore(home=0, away=0),
         ),
         observed_at=datetime(2026, 8, 29, 18, 0, tzinfo=timezone.utc),
+    )
+
+
+def news(level: NewsImportanceLevel) -> NewsState:
+    now = datetime(2026, 8, 29, 18, 0, tzinfo=timezone.utc)
+    story = NewsCluster(
+        id="story", headline="A developing story", language="en", topic=NewsTopic.WORLD,
+        articles=[], sources=[], first_seen_at=now, latest_seen_at=now,
+        importance=NewsImportance(score=0.9, level=level),
+    )
+    return NewsState(
+        active_story=story,
+        presentation=NewsPresentation(
+            story_id=story.id, level=level, started_at=now, ends_at=now.replace(hour=19),
+        ),
     )
 
 
@@ -80,6 +98,39 @@ class ModeResolverTests(unittest.TestCase):
 
         resolution = self.state._resolver.resolve(
             self.registry.get_all(), self.media.get(), False, matchday(MatchPhase.LIVE)
+        )
+        self.assertEqual(resolution.mode, ActivityMode.MATCHDAY)
+
+    def test_live_matchday_protects_against_major_news(self) -> None:
+        resolution = self.state._resolver.resolve(
+            [], None, False, matchday(MatchPhase.LIVE), news(NewsImportanceLevel.MAJOR)
+        )
+        self.assertEqual(resolution.mode, ActivityMode.MATCHDAY)
+
+    def test_major_news_overrides_gaming_and_development(self) -> None:
+        self.registry.register(hello("dev-test"))
+        self.registry.update("dev-test", telemetry("development"))
+        self.registry.register(hello("win-test"))
+        self.registry.update("win-test", gaming_telemetry())
+        resolution = self.state._resolver.resolve(
+            self.registry.get_all(), None, False, None, news(NewsImportanceLevel.MAJOR)
+        )
+        self.assertEqual(resolution.mode, ActivityMode.NEWS)
+
+    def test_important_news_beats_media_and_fallback_but_not_active_work(self) -> None:
+        important = news(NewsImportanceLevel.IMPORTANT)
+        self.media.update(playback())
+        self.assertEqual(self.state._resolver.resolve([], self.media.get(), False, None, important).mode, ActivityMode.NEWS)
+        self.registry.register(hello("dev-test"))
+        self.registry.update("dev-test", telemetry("development"))
+        self.assertEqual(
+            self.state._resolver.resolve(self.registry.get_all(), self.media.get(), False, None, important).mode,
+            ActivityMode.DEVELOPMENT,
+        )
+
+    def test_pre_match_remains_above_important_news(self) -> None:
+        resolution = self.state._resolver.resolve(
+            [], None, False, matchday(MatchPhase.PRE_MATCH), news(NewsImportanceLevel.IMPORTANT)
         )
         self.assertEqual(resolution.mode, ActivityMode.MATCHDAY)
 

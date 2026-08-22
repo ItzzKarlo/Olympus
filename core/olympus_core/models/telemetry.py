@@ -10,6 +10,7 @@ class ActivityMode(str, Enum):
     IDLE = "idle"
     NIGHT = "night"
     MATCHDAY = "matchday"
+    NEWS = "news"
     DEVELOPMENT = "development"
     GAMING = "gaming"
     MEDIA = "media"

@@ -12,6 +12,7 @@ from olympus_core.integrations.spotify import SpotifyApi, SpotifyCollector
 from olympus_core.integrations.weather import OpenMeteoApi, WeatherCollector
 from olympus_core.integrations.calendar import CalendarCollector, GoogleCalendarApi
 from olympus_core.integrations.football import ApiFootballProvider, FixtureFootballProvider, FootballCollector
+from olympus_core.integrations.news import FixtureNewsProvider, NewsCollector, RssNewsProvider
 from olympus_core.monitoring.config import load_monitoring_config
 from olympus_core.monitoring.runtime import MonitoringRuntime
 from olympus_core.models.agent import RegisteredAgent
@@ -20,6 +21,7 @@ from olympus_core.models.gameplay import GameplayEvent
 from olympus_core.models.weather import WeatherState
 from olympus_core.models.calendar import CalendarSnapshot
 from olympus_core.models.football import FootballDisplayEvent, FootballState
+from olympus_core.models.news import NewsDisplayEvent, NewsState
 from olympus_core.models.state import OlympusState
 from olympus_core.services.media import MediaStateStore
 from olympus_core.services.events import EventService
@@ -29,6 +31,7 @@ from olympus_core.services.gameplay import GameplayEventService
 from olympus_core.services.ambient import CalendarStateStore, WeatherStateStore
 from olympus_core.services.time_policy import TimePolicyService
 from olympus_core.services.football import FootballStateStore
+from olympus_core.services.news import NewsStateStore
 from olympus_core.websocket.agents import handle_agent_socket
 from olympus_core.websocket.display import handle_display_socket
 
@@ -40,6 +43,7 @@ media_store = MediaStateStore()
 weather_store = WeatherStateStore()
 calendar_store = CalendarStateStore(core_settings.timezone)
 football_store = FootballStateStore()
+news_store = NewsStateStore()
 time_policy_service = TimePolicyService(core_settings.night, core_settings.timezone)
 monitoring_store = MonitoringStore()
 event_service = EventService()
@@ -53,6 +57,7 @@ state_service = StateService(
     calendar=calendar_store,
     time_policy=time_policy_service,
     football=football_store,
+    news=news_store,
 )
 display_hub = DisplayHub()
 gameplay_service = GameplayEventService()
@@ -82,6 +87,11 @@ async def update_football_state(football: FootballState) -> None:
     await publish_display_state()
 
 
+async def update_news_state(news: NewsState) -> None:
+    news_store.update(news)
+    await publish_display_state()
+
+
 async def publish_ambient_time_progression() -> None:
     while True:
         await asyncio.sleep(60)
@@ -108,6 +118,10 @@ async def publish_gameplay_event(event: GameplayEvent) -> None:
 
 
 async def publish_football_event(event: FootballDisplayEvent) -> None:
+    await display_hub.broadcast_event(event)
+
+
+async def publish_news_event(event: NewsDisplayEvent) -> None:
     await display_hub.broadcast_event(event)
 
 
@@ -202,6 +216,26 @@ async def lifespan(_app: FastAPI):
     else:
         logger.info("Football collector disabled")
 
+    news_collector: NewsCollector | None = None
+    news_task: asyncio.Task[None] | None = None
+    if core_settings.news.configured:
+        news_provider = (
+            FixtureNewsProvider(core_settings.news)
+            if core_settings.news.provider == "fixture"
+            else RssNewsProvider(core_settings.news)
+        )
+        news_collector = NewsCollector(
+            core_settings.news,
+            news_provider,
+            update_news_state,
+            publish_news_event,
+        )
+        news_task = asyncio.create_task(news_collector.run(), name="news-collector")
+    elif core_settings.news.enabled:
+        logger.warning("News collector disabled because no usable feeds or fixture are configured")
+    else:
+        logger.info("News collector disabled")
+
     try:
         yield
     finally:
@@ -223,6 +257,9 @@ async def lifespan(_app: FastAPI):
         if football_collector is not None and football_task is not None:
             football_collector.stop()
             await football_task
+        if news_collector is not None and news_task is not None:
+            news_collector.stop()
+            await news_task
         await monitoring.stop()
 
 
