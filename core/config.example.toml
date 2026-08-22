@@ -1,0 +1,45 @@
+# Olympus v0.4 monitoring configuration. Copy to core/config.toml.
+core_host_poll_seconds = 5
+
+[network]
+enabled = true
+poll_seconds = 5
+timeout_seconds = 2
+gateway = "10.10.0.1"
+gateway_port = 53
+internet_host = "1.1.1.1"
+internet_port = 443
+dns_hostname = "example.com"
+https_url = "https://www.cloudflare.com/cdn-cgi/trace"
+failure_threshold = 3
+recovery_threshold = 2
+
+# Add important LAN or Meshnet targets. Targets are read-only TCP checks.
+# [[network.targets]]
+# id = "atlas"
+# name = "Atlas"
+# host = "100.x.x.x"
+# port = 22
+# alert = true
+
+[service_monitoring]
+poll_seconds = 10
+timeout_seconds = 3
+failure_threshold = 3
+recovery_threshold = 2
+
+# Supported service types are http, https, and tcp.
+# [[services]]
+# id = "pterodactyl"
+# name = "Pterodactyl"
+# type = "http"
+# url = "http://10.10.0.10:8080/health"
+# severity = "warning"
+
+# [[services]]
+# id = "minecraft"
+# name = "Minecraft"
+# type = "tcp"
+# host = "10.10.0.10"
+# port = 25565
+# severity = "warning"

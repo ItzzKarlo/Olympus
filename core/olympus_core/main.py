@@ -8,10 +8,14 @@ from olympus_core.agents.registry import AgentRegistry
 from olympus_core.config import SpotifySettings
 from olympus_core.display.hub import DisplayHub
 from olympus_core.integrations.spotify import SpotifyApi, SpotifyCollector
+from olympus_core.monitoring.config import load_monitoring_config
+from olympus_core.monitoring.runtime import MonitoringRuntime
 from olympus_core.models.agent import RegisteredAgent
 from olympus_core.models.media import MediaState
 from olympus_core.models.state import OlympusState
 from olympus_core.services.media import MediaStateStore
+from olympus_core.services.events import EventService
+from olympus_core.services.monitoring_store import MonitoringStore
 from olympus_core.services.state import StateService
 from olympus_core.websocket.agents import handle_agent_socket
 from olympus_core.websocket.display import handle_display_socket
@@ -20,7 +24,14 @@ from olympus_core.websocket.display import handle_display_socket
 logger = logging.getLogger(__name__)
 registry = AgentRegistry()
 media_store = MediaStateStore()
-state_service = StateService(registry, media_store)
+monitoring_store = MonitoringStore()
+event_service = EventService()
+state_service = StateService(
+    registry,
+    media_store,
+    monitoring=monitoring_store,
+    events=event_service,
+)
 display_hub = DisplayHub()
 
 
@@ -35,6 +46,13 @@ async def update_media_state(media: MediaState) -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    monitoring = MonitoringRuntime(
+        load_monitoring_config(),
+        monitoring_store,
+        event_service,
+        publish_display_state,
+    )
+    monitoring.start()
     settings = SpotifySettings.from_environment()
     collector: SpotifyCollector | None = None
     collector_task: asyncio.Task[None] | None = None
@@ -60,12 +78,13 @@ async def lifespan(_app: FastAPI):
         if collector is not None and collector_task is not None:
             collector.stop()
             await collector_task
+        await monitoring.stop()
 
 
 app = FastAPI(
     title="Olympus Core",
     description="Core service for the Olympus home display system.",
-    version="0.3.0",
+    version="0.4.0",
     lifespan=lifespan,
 )
 
@@ -75,7 +94,7 @@ async def health() -> dict[str, str]:
     return {
         "status": "ok",
         "service": "olympus-core",
-        "version": "0.3.0",
+        "version": "0.4.0",
     }
 
 

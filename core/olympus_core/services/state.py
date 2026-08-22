@@ -3,7 +3,9 @@ from datetime import datetime, timezone
 from olympus_core.agents.registry import AgentRegistry
 from olympus_core.models.state import DisplayState, MachineState, OlympusState
 from olympus_core.services.media import MediaStateStore
+from olympus_core.services.events import EventService
 from olympus_core.services.mode_resolver import ModeResolver
+from olympus_core.services.monitoring_store import MonitoringStore
 
 
 class StateService:
@@ -14,10 +16,14 @@ class StateService:
         registry: AgentRegistry,
         media: MediaStateStore | None = None,
         resolver: ModeResolver | None = None,
+        monitoring: MonitoringStore | None = None,
+        events: EventService | None = None,
     ) -> None:
         self._registry = registry
         self._media = media or MediaStateStore()
         self._resolver = resolver or ModeResolver()
+        self._monitoring = monitoring or MonitoringStore()
+        self._events = events or EventService()
 
     def current(self) -> OlympusState:
         agents = self._registry.get_all()
@@ -45,6 +51,11 @@ class StateService:
                 for agent in agents
             },
             media=media,
+            core_host=self._monitoring.core_host,
+            network=self._monitoring.network,
+            services=dict(self._monitoring.services),
+            alerts=self._events.active_alerts(),
+            recoveries=self._events.recoveries(),
         )
 
     def display_state(self) -> DisplayState:

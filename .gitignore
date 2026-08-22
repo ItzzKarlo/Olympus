@@ -63,6 +63,7 @@ build/
 .env
 .env.local
 .env.*.local
+core/config.toml
 
 
 # ––––––––––––––––––––––––––––––––––––

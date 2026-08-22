@@ -1,9 +1,16 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from olympus_core.models.media import MediaState
+from olympus_core.models.monitoring import (
+    ActiveAlert,
+    CoreHostState,
+    NetworkState,
+    RecoveryNotice,
+    ServiceState,
+)
 from olympus_core.models.telemetry import (
     ActivityMode,
     ActivityTelemetry,
@@ -35,6 +42,11 @@ class OlympusState(BaseModel):
     active_device: str | None
     machines: dict[str, MachineState]
     media: MediaState | None = None
+    core_host: CoreHostState | None = None
+    network: NetworkState | None = None
+    services: dict[str, ServiceState] = Field(default_factory=dict)
+    alerts: list[ActiveAlert] = Field(default_factory=list)
+    recoveries: list[RecoveryNotice] = Field(default_factory=list)
 
 
 class DisplayState(OlympusState):
