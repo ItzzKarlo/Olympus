@@ -107,6 +107,12 @@ class FootballMatchdaySettings:
 
 
 @dataclass(frozen=True, slots=True)
+class FootballPlayerSettings:
+    watched: tuple[str, ...] = ()
+    rating_change_threshold: float = 0.25
+
+
+@dataclass(frozen=True, slots=True)
 class FootballSettings:
     enabled: bool = False
     provider: str = "api-football"
@@ -119,14 +125,20 @@ class FootballSettings:
     api_key: str | None = None
     fixture_path: str | None = None
     matchday: FootballMatchdaySettings = FootballMatchdaySettings()
+    players: FootballPlayerSettings = FootballPlayerSettings()
     poll_upcoming_seconds: float = 1_800.0
     poll_near_match_seconds: float = 300.0
     poll_pre_match_seconds: float = 60.0
     poll_live_seconds: float = 15.0
     poll_half_time_seconds: float = 30.0
     poll_post_match_seconds: float = 60.0
+    poll_team_stats_seconds: float = 60.0
+    poll_player_stats_seconds: float = 60.0
     live_stale_seconds: float = 60.0
     unavailable_seconds: float = 900.0
+    low_quota_remaining: int = 25
+    critical_quota_remaining: int = 5
+    max_history_samples: int = 96
 
     @property
     def configured(self) -> bool:
@@ -171,6 +183,10 @@ def _coordinate(value: Any, minimum: float, maximum: float) -> float | None:
 
 def _positive_int(value: Any, default: int) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else default
+
+
+def _nonnegative_int(value: Any, default: int) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else default
 
 
 WEEKDAYS = {
@@ -219,6 +235,7 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
     night_data = _mapping(data.get("night"))
     football_data = _mapping(data.get("football"))
     matchday_data = _mapping(football_data.get("matchday"))
+    player_data = _mapping(football_data.get("players"))
     weather_timezone = _timezone(weather_data.get("timezone"), timezone)
     calendar_timezone = _timezone(calendar_data.get("timezone"), timezone)
     weather_poll = _positive_float(
@@ -234,6 +251,11 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
         value.strip() for value in raw_ids
         if isinstance(value, str) and value.strip()
     ) if isinstance(raw_ids, list) else ("primary",)
+    raw_watched = player_data.get("watched", [])
+    watched_players = tuple(dict.fromkeys(
+        value.strip() for value in raw_watched
+        if isinstance(value, str) and value.strip()
+    )) if isinstance(raw_watched, list) else ()
 
     return CoreSettings(
         timezone=timezone,
@@ -283,6 +305,13 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
                 pre_match_minutes=_positive_int(matchday_data.get("pre_match_minutes"), 60),
                 post_match_minutes=_positive_int(matchday_data.get("post_match_minutes"), 20),
             ),
+            players=FootballPlayerSettings(
+                watched=watched_players,
+                rating_change_threshold=_positive_float(
+                    str(player_data.get("rating_change_threshold")) if player_data.get("rating_change_threshold") is not None else None,
+                    0.25,
+                ),
+            ),
             poll_upcoming_seconds=_positive_float(
                 str(football_data.get("poll_upcoming_minutes")) if football_data.get("poll_upcoming_minutes") is not None else None,
                 30.0,
@@ -307,6 +336,14 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
                 str(football_data.get("poll_post_match_seconds")) if football_data.get("poll_post_match_seconds") is not None else None,
                 60.0,
             ),
+            poll_team_stats_seconds=_positive_float(
+                str(football_data.get("poll_team_stats_seconds")) if football_data.get("poll_team_stats_seconds") is not None else None,
+                60.0,
+            ),
+            poll_player_stats_seconds=_positive_float(
+                str(football_data.get("poll_player_stats_seconds")) if football_data.get("poll_player_stats_seconds") is not None else None,
+                60.0,
+            ),
             live_stale_seconds=_positive_float(
                 str(football_data.get("live_stale_seconds")) if football_data.get("live_stale_seconds") is not None else None,
                 60.0,
@@ -315,6 +352,9 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
                 str(football_data.get("unavailable_seconds")) if football_data.get("unavailable_seconds") is not None else None,
                 900.0,
             ),
+            low_quota_remaining=_nonnegative_int(football_data.get("low_quota_remaining"), 25),
+            critical_quota_remaining=_nonnegative_int(football_data.get("critical_quota_remaining"), 5),
+            max_history_samples=min(_positive_int(football_data.get("max_history_samples"), 96), 512),
         ),
     )
 

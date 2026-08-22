@@ -12,9 +12,10 @@ from olympus_core.integrations.football.normalization import (
     normalize_events,
     normalize_fixture,
     normalize_lineups,
+    normalize_player_statistics,
     normalize_statistics,
 )
-from olympus_core.models.football import MatchPhase, ProviderFootballSnapshot
+from olympus_core.models.football import FootballQuotaState, MatchPhase, ProviderFootballSnapshot
 
 
 class ApiFootballProvider:
@@ -37,6 +38,32 @@ class ApiFootballProvider:
         self._monotonic = monotonic_clock or time.monotonic
         self._schedule: list[Any] = []
         self._schedule_refreshed_at: float | None = None
+        self._active_fixture_id: str | None = None
+        self._quota: FootballQuotaState | None = None
+
+    @staticmethod
+    def _header_integer(value: str | None) -> int | None:
+        try:
+            return int(value) if value is not None else None
+        except ValueError:
+            return None
+
+    def _capture_quota(self, response: httpx.Response) -> None:
+        daily_limit = self._header_integer(response.headers.get("x-ratelimit-requests-limit"))
+        daily_remaining = self._header_integer(response.headers.get("x-ratelimit-requests-remaining"))
+        minute_limit = self._header_integer(response.headers.get("x-ratelimit-limit"))
+        minute_remaining = self._header_integer(response.headers.get("x-ratelimit-remaining"))
+        if all(value is None for value in (daily_limit, daily_remaining, minute_limit, minute_remaining)):
+            return
+        self._quota = FootballQuotaState(
+            daily_limit=daily_limit,
+            daily_remaining=daily_remaining,
+            minute_limit=minute_limit,
+            minute_remaining=minute_remaining,
+            low=daily_remaining is not None and daily_remaining <= self._settings.low_quota_remaining,
+            critical=daily_remaining is not None and daily_remaining <= self._settings.critical_quota_remaining,
+            observed_at=self._clock(),
+        )
 
     async def _get(self, path: str, params: dict[str, Any]) -> list[Any]:
         if not self._settings.api_key:
@@ -49,6 +76,7 @@ class ApiFootballProvider:
             )
         except httpx.HTTPError as error:
             raise FootballProviderError("API-Football is temporarily unavailable") from error
+        self._capture_quota(response)
         if response.status_code == 429:
             retry = response.headers.get("retry-after")
             try:
@@ -90,7 +118,10 @@ class ApiFootballProvider:
             raise ValueError("Football provider clock must be timezone-aware")
         if (
             self._schedule_refreshed_at is None
-            or self._monotonic() - self._schedule_refreshed_at >= self._settings.poll_upcoming_seconds
+            or (
+                self._active_fixture_id is None
+                and self._monotonic() - self._schedule_refreshed_at >= self._settings.poll_upcoming_seconds
+            )
         ):
             await self._refresh_schedule(now)
 
@@ -103,10 +134,12 @@ class ApiFootballProvider:
             (match for match in matches if match.status == MatchPhase.UPCOMING and match.kickoff >= now),
             None,
         )
-        active = next(
-            (match for match in matches if match.status in {MatchPhase.LIVE, MatchPhase.HALF_TIME, MatchPhase.SUSPENDED}),
-            None,
-        )
+        active = next((match for match in matches if match.id == self._active_fixture_id), None)
+        if active is None:
+            active = next(
+                (match for match in matches if match.status in {MatchPhase.LIVE, MatchPhase.HALF_TIME, MatchPhase.SUSPENDED}),
+                None,
+            )
         if active is None:
             active = next(
                 (
@@ -138,6 +171,9 @@ class ApiFootballProvider:
                 active = normalized
                 if normalized.status == MatchPhase.UPCOMING:
                     next_match = normalized
+                self._active_fixture_id = normalized.id if normalized.status in {
+                    MatchPhase.UPCOMING, MatchPhase.LIVE, MatchPhase.HALF_TIME, MatchPhase.SUSPENDED,
+                } else None
 
         tracked_team = next(
             (team for match in matches for team in (match.home, match.away) if team.id == self._settings.tracked_id),
@@ -161,6 +197,9 @@ class ApiFootballProvider:
             if active is not None else None,
             statistics=normalize_statistics(detail.get("statistics") if isinstance(detail, Mapping) else None, active, self._settings)
             if active is not None else None,
+            player_statistics=normalize_player_statistics(detail.get("players") if isinstance(detail, Mapping) else None, active, self._settings)
+            if active is not None else [],
+            quota=self._quota,
             observed_at=now,
         )
 

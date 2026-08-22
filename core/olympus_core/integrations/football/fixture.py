@@ -11,6 +11,7 @@ from olympus_core.integrations.football.normalization import (
     normalize_events,
     normalize_fixture,
     normalize_lineups,
+    normalize_player_statistics,
     normalize_statistics,
 )
 from olympus_core.models.football import FootballTeam, MatchPhase, ProviderFootballSnapshot
@@ -46,6 +47,7 @@ class FixtureFootballProvider:
             events=normalize_events(raw.get("events") if isinstance(raw, Mapping) else None, match, self._settings),
             lineups=normalize_lineups(raw.get("lineups") if isinstance(raw, Mapping) else None, match, self._settings),
             statistics=normalize_statistics(raw.get("statistics") if isinstance(raw, Mapping) else None, match, self._settings),
+            player_statistics=normalize_player_statistics(raw.get("players") if isinstance(raw, Mapping) else None, match, self._settings),
             observed_at=datetime.now(timezone.utc),
         )
 

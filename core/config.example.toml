@@ -32,13 +32,24 @@ poll_pre_match_seconds = 60
 poll_live_seconds = 15
 poll_half_time_seconds = 30
 poll_post_match_seconds = 60
+poll_team_stats_seconds = 60
+poll_player_stats_seconds = 60
 # Keep the latest trusted live state through brief provider interruptions.
 live_stale_seconds = 60
 unavailable_seconds = 900
+low_quota_remaining = 25
+critical_quota_remaining = 5
+max_history_samples = 96
 
 [football.matchday]
 pre_match_minutes = 60
 post_match_minutes = 20
+
+[football.players]
+# Stable API-Football player IDs are authoritative. Names also work for local
+# development fixtures, but should not be relied on across squad changes.
+watched = []
+rating_change_threshold = 0.25
 
 [weather]
 enabled = false

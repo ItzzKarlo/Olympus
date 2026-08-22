@@ -7,6 +7,7 @@ import time
 from uuid import uuid4
 
 from olympus_core.config import FootballSettings
+from olympus_core.integrations.football.analytics import FootballAnalytics, RatingChange
 from olympus_core.integrations.football.base import FootballProvider, FootballRateLimitError
 from olympus_core.models.football import (
     FootballDisplayEvent,
@@ -89,6 +90,7 @@ class MatchdayPolicy:
             tracked_team=snapshot.tracked_team,
             next_match=snapshot.next_match,
             matchday=context,
+            quota=snapshot.quota,
         )
 
 
@@ -118,6 +120,7 @@ class FootballCollector:
         self._phase: MatchPhase | None = None
         self._seen_event_ids: set[str] = set()
         self._lineup_available = False
+        self._analytics = FootballAnalytics(settings)
 
     async def _publish(self, state: FootballState) -> FootballState:
         if state != self._published:
@@ -131,6 +134,22 @@ class FootballCollector:
         result = self._on_event(event)
         if inspect.isawaitable(result):
             await result
+
+    async def _emit_rating_changes(self, match_id: str, observed_at: datetime, changes: list[RatingChange]) -> None:
+        for change in changes:
+            await self._notify_event(FootballDisplayEvent(
+                id=f"rating:{match_id}:{change.player.id or change.player.name}:{observed_at.isoformat()}",
+                type="football.player.rating_changed",
+                timestamp=observed_at,
+                payload={
+                    "match_id": match_id,
+                    "player": change.player.model_dump(mode="json"),
+                    "previous_rating": change.previous,
+                    "rating": change.current,
+                    "delta": round(change.delta, 2),
+                    "for_tracked_team": True,
+                },
+            ))
 
     def _effective_phase(self, snapshot: ProviderFootballSnapshot, state: FootballState) -> MatchPhase:
         if state.matchday is not None:
@@ -213,22 +232,33 @@ class FootballCollector:
             }))
 
         self._retry_after = None
+        rating_changes: list[RatingChange] = []
+        if state.matchday is not None:
+            context, rating_changes = self._analytics.enrich(snapshot, state.matchday, tick)
+            state = state.model_copy(update={"matchday": context})
         self._last_good = state
         self._last_success_at = tick
         await self._emit_changes(snapshot, state)
+        if snapshot.match is not None:
+            await self._emit_rating_changes(snapshot.match.id, snapshot.observed_at, rating_changes)
         return await self._publish(state)
 
     def poll_interval(self, state: FootballState, now: datetime | None = None) -> float:
         if self._retry_after is not None:
             return max(self._retry_after, self._settings.poll_pre_match_seconds)
         if state.matchday is not None:
-            return {
+            interval = {
                 MatchPhase.LIVE: self._settings.poll_live_seconds,
                 MatchPhase.HALF_TIME: self._settings.poll_half_time_seconds,
                 MatchPhase.SUSPENDED: self._settings.poll_half_time_seconds,
                 MatchPhase.PRE_MATCH: self._settings.poll_pre_match_seconds,
                 MatchPhase.POST_MATCH: self._settings.poll_post_match_seconds,
             }.get(state.matchday.phase, self._settings.poll_post_match_seconds)
+            if state.quota and state.quota.critical:
+                return max(interval, 60.0)
+            if state.quota and state.quota.low:
+                return max(interval, 30.0)
+            return interval
         current = now or datetime.now(timezone.utc)
         if state.next_match is not None and state.next_match.kickoff - current <= timedelta(hours=24):
             return self._settings.poll_near_match_seconds

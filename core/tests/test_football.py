@@ -207,6 +207,22 @@ class ApiFootballProviderTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(FootballProviderError):
             await provider.fetch()
 
+    async def test_captures_daily_and_minute_quota_headers(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, headers={
+                "x-ratelimit-requests-limit": "7500",
+                "x-ratelimit-requests-remaining": "24",
+                "X-RateLimit-Limit": "300",
+                "X-RateLimit-Remaining": "289",
+            }, json={"errors": {}, "response": [raw_fixture("NS")]})
+
+        provider = ApiFootballProvider(SETTINGS, httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+        state = await provider.fetch()
+        self.assertEqual(state.quota.daily_limit, 7500)
+        self.assertEqual(state.quota.daily_remaining, 24)
+        self.assertEqual(state.quota.minute_remaining, 289)
+        self.assertTrue(state.quota.low)
+
 
 class DummyProvider:
     def __init__(self, responses: list[ProviderFootballSnapshot | Exception]) -> None:
@@ -308,14 +324,19 @@ class FootballConfigTests(unittest.TestCase):
                     "enabled": True,
                     "team_id": "157",
                     "poll_live_seconds": 20,
+                    "poll_player_stats_seconds": 75,
                     "live_stale_seconds": 45,
                     "unavailable_seconds": 600,
                     "matchday": {"pre_match_minutes": 75, "post_match_minutes": 25},
+                    "players": {"watched": ["1", "Harry Kane", "1"], "rating_change_threshold": 0.3},
                 },
             }).football
         self.assertTrue(configured.configured)
         self.assertEqual(configured.timezone, "Europe/Berlin")
         self.assertEqual(configured.poll_live_seconds, 20)
+        self.assertEqual(configured.poll_player_stats_seconds, 75)
+        self.assertEqual(configured.players.watched, ("1", "Harry Kane"))
+        self.assertEqual(configured.players.rating_change_threshold, 0.3)
         self.assertEqual(configured.live_stale_seconds, 45)
         self.assertEqual(configured.unavailable_seconds, 600)
         self.assertEqual(configured.matchday.pre_match_minutes, 75)

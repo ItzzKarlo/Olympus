@@ -13,6 +13,15 @@ from olympus_core.models.football import (
     FootballMatch,
     FootballMatchEvent,
     FootballPlayer,
+    FootballPlayerCards,
+    FootballPlayerDefending,
+    FootballPlayerDribbles,
+    FootballPlayerDuels,
+    FootballPlayerFouls,
+    FootballPlayerPasses,
+    FootballPlayerPenalties,
+    FootballPlayerShots,
+    FootballPlayerStatistics,
     FootballScore,
     FootballStatistics,
     FootballTeam,
@@ -190,7 +199,12 @@ def _player(value: Any) -> FootballPlayer | None:
     if name is None:
         return None
     identifier = player.get("id")
-    return FootballPlayer(id=str(identifier) if identifier is not None else None, name=name)
+    return FootballPlayer(
+        id=str(identifier) if identifier is not None else None,
+        name=name,
+        number=_integer(player.get("number")),
+        position=_text(player.get("pos") or player.get("position")),
+    )
 
 
 def normalize_events(values: Any, match: FootballMatch, settings: FootballSettings) -> list[FootballMatchEvent]:
@@ -324,3 +338,101 @@ def normalize_statistics(values: Any, match: FootballMatch, settings: FootballSe
         if side:
             sides[side] = _team_statistics(entry.get("statistics"))
     return FootballStatistics(home=sides.get("home"), away=sides.get("away")) if sides else None
+
+
+def _rating(value: Any) -> float | None:
+    parsed = _number(value)
+    return parsed if parsed is not None and 0 <= parsed <= 10 else None
+
+
+def normalize_player_statistics(
+    values: Any,
+    match: FootballMatch,
+    settings: FootballSettings,
+) -> list[FootballPlayerStatistics]:
+    """Normalize API-Football's fixture player-performance blocks for both teams."""
+    if not isinstance(values, list):
+        return []
+    result: list[FootballPlayerStatistics] = []
+    for team_block in values:
+        block = _mapping(team_block)
+        team = normalize_team(block.get("team"), settings)
+        players = block.get("players")
+        if team is None or not isinstance(players, list):
+            continue
+        if team.id not in {match.home.id, match.away.id}:
+            continue
+        for entry_value in players:
+            entry = _mapping(entry_value)
+            player_data = _mapping(entry.get("player"))
+            name = _text(player_data.get("name"))
+            statistics_values = entry.get("statistics")
+            if name is None or not isinstance(statistics_values, list) or not statistics_values:
+                continue
+            statistic = _mapping(statistics_values[0])
+            games = _mapping(statistic.get("games"))
+            shots = _mapping(statistic.get("shots"))
+            goals = _mapping(statistic.get("goals"))
+            passes = _mapping(statistic.get("passes"))
+            tackles = _mapping(statistic.get("tackles"))
+            duels = _mapping(statistic.get("duels"))
+            dribbles = _mapping(statistic.get("dribbles"))
+            fouls = _mapping(statistic.get("fouls"))
+            cards = _mapping(statistic.get("cards"))
+            penalty = _mapping(statistic.get("penalty"))
+            identifier = player_data.get("id")
+            substitute = games.get("substitute")
+            starter = not substitute if isinstance(substitute, bool) else None
+            result.append(FootballPlayerStatistics(
+                player=FootballPlayer(
+                    id=str(identifier) if identifier is not None else None,
+                    name=name,
+                    number=_integer(games.get("number")),
+                    position=_text(games.get("position")),
+                ),
+                team=team,
+                for_tracked_team=team.id == settings.tracked_id,
+                minutes=_integer(games.get("minutes")),
+                rating=_rating(games.get("rating")),
+                starter=starter,
+                goals=_integer(goals.get("total")),
+                assists=_integer(goals.get("assists")),
+                shots=FootballPlayerShots(
+                    total=_integer(shots.get("total")),
+                    on_target=_integer(shots.get("on")),
+                ),
+                passes=FootballPlayerPasses(
+                    total=_integer(passes.get("total")),
+                    key=_integer(passes.get("key")),
+                    accuracy_percent=_number(passes.get("accuracy")),
+                ),
+                defending=FootballPlayerDefending(
+                    tackles=_integer(tackles.get("total")),
+                    interceptions=_integer(tackles.get("interceptions")),
+                    blocks=_integer(tackles.get("blocks")),
+                ),
+                duels=FootballPlayerDuels(
+                    total=_integer(duels.get("total")),
+                    won=_integer(duels.get("won")),
+                ),
+                dribbles=FootballPlayerDribbles(
+                    attempted=_integer(dribbles.get("attempts")),
+                    successful=_integer(dribbles.get("success")),
+                ),
+                fouls=FootballPlayerFouls(
+                    committed=_integer(fouls.get("committed")),
+                    drawn=_integer(fouls.get("drawn")),
+                ),
+                cards=FootballPlayerCards(
+                    yellow=_integer(cards.get("yellow")),
+                    red=_integer(cards.get("red")),
+                ),
+                penalties=FootballPlayerPenalties(
+                    won=_integer(penalty.get("won")),
+                    committed=_integer(penalty.get("committed") if "committed" in penalty else penalty.get("commited")),
+                    scored=_integer(penalty.get("scored")),
+                    missed=_integer(penalty.get("missed")),
+                    saved=_integer(penalty.get("saved")),
+                ),
+            ))
+    return result
