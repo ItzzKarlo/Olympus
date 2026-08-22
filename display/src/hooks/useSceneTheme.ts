@@ -8,6 +8,7 @@ import { developmentTheme, idleTheme } from "../theme/themes";
 import { getIdleWeatherTheme } from "../theme/idleWeatherTheme";
 import { applyNightAdaptation, getNightTheme } from "../theme/nightTheme";
 import { getMatchdayTheme } from "../theme/matchdayTheme";
+import { getNewsTheme } from "../theme/newsTheme";
 import type { OlympusState } from "../types/state";
 
 interface ResolvedMediaTheme {
@@ -44,7 +45,9 @@ export function useSceneTheme(state: OlympusState | null): SceneTheme {
       state.football.matchday.result,
     );
   }
-  if (state?.mode === "gaming" && state.gaming) {
+  if (state?.mode === "news" && state.news?.active_story) {
+    theme = getNewsTheme(state.news.active_story.topic, state.news.active_story.importance.level);
+  } else if (state?.mode === "gaming" && state.gaming) {
     if (state.gaming.game.id === "minecraft" && state.gaming.minecraft) {
       theme = getMinecraftDimensionTheme(state.gaming.minecraft.world.dimension);
     } else {

@@ -2,6 +2,7 @@ import { AmbientStatus } from "../../components/AmbientStatus";
 import { Brand } from "../../components/Brand";
 import { ConnectionStatus } from "../../components/ConnectionStatus";
 import { NextMatchAmbient } from "../../components/NextMatchAmbient";
+import { AmbientNews } from "../../components/AmbientNews";
 import type { CalendarEvent, ConnectionStatus as Status, OlympusState } from "../../types/state";
 import {
   formatDate,
@@ -72,6 +73,7 @@ export function NightMode({ connectionStatus, now, state }: NightModeProps) {
             trackedTeamId={state.football?.tracked_team.id ?? ""}
             timezone={state.timezone}
           />
+          {state.news?.available ? <AmbientNews compact now={now} stories={state.news.ambient} /> : null}
         </div>
 
         {(nextEvent || tomorrow.length > 0) ? (

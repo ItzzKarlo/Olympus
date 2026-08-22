@@ -5,6 +5,7 @@ export type ActivityMode =
   | "media"
   | "night"
   | "matchday"
+  | "news"
   | "unknown";
 
 export interface SystemTelemetry {
@@ -437,9 +438,96 @@ export interface FootballDisplayEvent {
   };
 }
 
+export type NewsTopic =
+  | "world" | "germany" | "local" | "politics" | "economy" | "technology"
+  | "science" | "weather" | "transport" | "sports" | "entertainment" | "other";
+export type NewsImportanceLevel = "ambient" | "notable" | "important" | "major";
+export interface NewsSource {
+  id: string;
+  name: string;
+  language: string;
+  region: string | null;
+  trust: number;
+}
+export interface NewsArticle {
+  id: string;
+  provider_id: string | null;
+  headline: string;
+  source: NewsSource;
+  url: string;
+  canonical_url: string;
+  published_at: string | null;
+  observed_at: string;
+  summary: string | null;
+  language: string;
+  categories: string[];
+  topic: NewsTopic;
+}
+export interface NewsImportance {
+  score: number;
+  level: NewsImportanceLevel;
+  factors: Record<string, number>;
+}
+export interface NewsCluster {
+  id: string;
+  headline: string;
+  summary: string | null;
+  language: string;
+  topic: NewsTopic;
+  articles: NewsArticle[];
+  sources: NewsSource[];
+  first_seen_at: string;
+  latest_seen_at: string;
+  importance: NewsImportance;
+}
+export interface NewsPresentation {
+  active: boolean;
+  story_id: string;
+  level: NewsImportanceLevel;
+  started_at: string;
+  ends_at: string;
+}
+export interface NewsFeedHealth {
+  feed_id: string;
+  last_success_at: string | null;
+  last_error: string | null;
+  stale: boolean;
+}
+export interface NewsState {
+  available: boolean;
+  last_updated_at: string | null;
+  stale: boolean;
+  top_stories: NewsCluster[];
+  ambient: NewsCluster[];
+  active_story: NewsCluster | null;
+  presentation: NewsPresentation | null;
+  feed_health: NewsFeedHealth[];
+}
+export interface NewsDisplayEvent {
+  id: string;
+  type: string;
+  category: "news";
+  severity: "info" | "warning" | "critical";
+  timestamp: string;
+  source: string;
+  payload: { story?: NewsCluster; [key: string]: unknown };
+}
+
+export interface LiveEvent {
+  id: string;
+  type: string;
+  title: string;
+  status: string;
+  started_at: string | null;
+  updated_at: string;
+  provider: string;
+  summary: string | null;
+  data: Record<string, unknown>;
+}
+
 export interface DisplayEventMessage {
   type: "event";
-  event: GameplayEvent | FootballDisplayEvent;
+  event: GameplayEvent | FootballDisplayEvent | NewsDisplayEvent;
 }
 
 export type WeatherCondition =
@@ -524,6 +612,8 @@ export interface OlympusState {
   calendar: CalendarState | null;
   time_policy: TimePolicyState;
   football: FootballState | null;
+  news: NewsState | null;
+  live_events: LiveEvent[];
   gaming: GamingState | null;
   media: MediaState | null;
   core_host: CoreHostState | null;

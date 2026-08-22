@@ -13,6 +13,7 @@ import { GamingMode } from "./modes/Gaming/GamingMode";
 import { MediaMode } from "./modes/Media/MediaMode";
 import { MatchdayMode } from "./modes/Matchday/MatchdayMode";
 import { NightMode } from "./modes/Night/NightMode";
+import { NewsMode } from "./modes/News/NewsMode";
 import { sceneStyle } from "./theme/SceneTheme";
 import { idleTheme } from "./theme/themes";
 
@@ -41,6 +42,8 @@ export default function App() {
 
   const scene = state.mode === "matchday" && state.football?.matchday ? (
       <MatchdayMode connectionStatus={connectionStatus} now={now} state={state} />
+    ) : state.mode === "news" && state.news?.active_story ? (
+      <NewsMode connectionStatus={connectionStatus} now={now} state={state} />
     ) : state.mode === "gaming" && state.gaming ? (
       <GamingMode connectionStatus={connectionStatus} now={now} state={state} />
     ) : state.mode === "development" ? (

@@ -67,6 +67,7 @@ export function useOlympusState(): OlympusConnection {
           eventTimers.add(eventTimer);
           return;
         }
+        if (message.event.category === "news") return;
         const gameplayEvent = message.event;
         setGameplayEvents((current) => [...current.filter((item) => item.id !== gameplayEvent.id), gameplayEvent]);
         const lifetime = gameplayEvent.type === "minecraft.player.died" ? 2_800

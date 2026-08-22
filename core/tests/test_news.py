@@ -75,6 +75,7 @@ class FeedNormalizationTests(unittest.TestCase):
         self.assertEqual(parsed[0].published_at, datetime(2026, 8, 22, 17, 30, tzinfo=timezone.utc))
         self.assertEqual(parsed[0].canonical_url, "https://example.com/story?keep=1")
         self.assertNotIn("<", parsed[0].summary)
+        self.assertNotIn("bad()", parsed[0].summary)
         self.assertEqual(parsed[0].categories, ["Transport"])
         self.assertEqual(parsed[0].topic, NewsTopic.TRANSPORT)
 

@@ -1,7 +1,8 @@
 import type {
   ActivityMode, ActivityTelemetry, ActiveAlert, CalendarEvent, CalendarState, CoreHostState, CurrentWeather, DailyWeather, DisplayEventMessage, FootballDisplayEvent, FootballLineupPlayer, FootballLineups, FootballMatch, FootballMatchEvent, FootballPlayerStatistics, FootballQuotaState, FootballState, FootballStatistics, FootballTeam, FootballTeamLineup, FootballTeamStatistics, GameInfo, GameplayEvent, GamingState, GpuTelemetry,
-  MachineState, MediaAlbum, MediaArtist, MediaContext, MediaQueueTrack,
+  LiveEvent, MachineState, MediaAlbum, MediaArtist, MediaContext, MediaQueueTrack,
   MediaState, MediaTrack, NetworkState, NetworkTelemetry, OlympusState,
+  NewsArticle, NewsCluster, NewsDisplayEvent, NewsState,
   ProbeState, RecoveryNotice, ServiceState, StorageTelemetry, SystemTelemetry,
   TemperatureTelemetry, TimePolicyState, WeatherCondition, WeatherState,
 } from "../types/state";
@@ -25,7 +26,7 @@ function isOptionalNumber(value: unknown): value is number | null | undefined {
 }
 
 function isActivityMode(value: unknown): value is ActivityMode {
-  return ["idle", "development", "gaming", "media", "night", "matchday", "unknown"].includes(value as string);
+  return ["idle", "development", "gaming", "media", "night", "matchday", "news", "unknown"].includes(value as string);
 }
 
 function isSystemTelemetry(value: unknown): value is SystemTelemetry {
@@ -296,6 +297,61 @@ function isFootballDisplayEvent(value: unknown): value is FootballDisplayEvent {
     (value.payload.event === undefined || isFootballMatchEvent(value.payload.event));
 }
 
+const NEWS_TOPICS = ["world", "germany", "local", "politics", "economy", "technology", "science", "weather", "transport", "sports", "entertainment", "other"];
+const NEWS_LEVELS = ["ambient", "notable", "important", "major"];
+
+function isNewsSource(value: unknown): boolean {
+  return isRecord(value) && typeof value.id === "string" && typeof value.name === "string" &&
+    typeof value.language === "string" && isNullableString(value.region) && typeof value.trust === "number";
+}
+
+function isNewsArticle(value: unknown): value is NewsArticle {
+  return isRecord(value) && typeof value.id === "string" && isNullableString(value.provider_id) &&
+    typeof value.headline === "string" && isNewsSource(value.source) && typeof value.url === "string" &&
+    typeof value.canonical_url === "string" && isNullableString(value.published_at) &&
+    typeof value.observed_at === "string" && isNullableString(value.summary) && typeof value.language === "string" &&
+    Array.isArray(value.categories) && value.categories.every((item) => typeof item === "string") &&
+    NEWS_TOPICS.includes(value.topic as string);
+}
+
+function isNewsCluster(value: unknown): value is NewsCluster {
+  return isRecord(value) && typeof value.id === "string" && typeof value.headline === "string" &&
+    isNullableString(value.summary) && typeof value.language === "string" && NEWS_TOPICS.includes(value.topic as string) &&
+    Array.isArray(value.articles) && value.articles.every(isNewsArticle) &&
+    Array.isArray(value.sources) && value.sources.every(isNewsSource) &&
+    typeof value.first_seen_at === "string" && typeof value.latest_seen_at === "string" &&
+    isRecord(value.importance) && typeof value.importance.score === "number" &&
+    NEWS_LEVELS.includes(value.importance.level as string) && isRecord(value.importance.factors) &&
+    Object.values(value.importance.factors).every((item) => typeof item === "number");
+}
+
+function isNewsState(value: unknown): value is NewsState {
+  return isRecord(value) && typeof value.available === "boolean" && isNullableString(value.last_updated_at) &&
+    typeof value.stale === "boolean" && Array.isArray(value.top_stories) && value.top_stories.every(isNewsCluster) &&
+    Array.isArray(value.ambient) && value.ambient.every(isNewsCluster) &&
+    (value.active_story === null || isNewsCluster(value.active_story)) &&
+    (value.presentation === null || (isRecord(value.presentation) && typeof value.presentation.active === "boolean" &&
+      typeof value.presentation.story_id === "string" && NEWS_LEVELS.includes(value.presentation.level as string) &&
+      typeof value.presentation.started_at === "string" && typeof value.presentation.ends_at === "string")) &&
+    Array.isArray(value.feed_health) && value.feed_health.every((health) => isRecord(health) &&
+      typeof health.feed_id === "string" && isNullableString(health.last_success_at) &&
+      isNullableString(health.last_error) && typeof health.stale === "boolean");
+}
+
+function isNewsDisplayEvent(value: unknown): value is NewsDisplayEvent {
+  return isRecord(value) && typeof value.id === "string" && typeof value.type === "string" &&
+    value.category === "news" && ["info", "warning", "critical"].includes(value.severity as string) &&
+    typeof value.timestamp === "string" && typeof value.source === "string" && isRecord(value.payload) &&
+    (value.payload.story === undefined || isNewsCluster(value.payload.story));
+}
+
+function isLiveEvent(value: unknown): value is LiveEvent {
+  return isRecord(value) && typeof value.id === "string" && typeof value.type === "string" &&
+    typeof value.title === "string" && typeof value.status === "string" && isNullableString(value.started_at) &&
+    typeof value.updated_at === "string" && typeof value.provider === "string" &&
+    isNullableString(value.summary) && isRecord(value.data);
+}
+
 const WEATHER_CONDITIONS: WeatherCondition[] = [
   "clear", "mostly_clear", "partly_cloudy", "cloudy", "fog", "drizzle",
   "rain", "heavy_rain", "snow", "thunderstorm", "unknown",
@@ -405,6 +461,8 @@ export function parseStateMessage(rawMessage: string): OlympusState | null {
     !(value.weather === undefined || value.weather === null || isWeatherState(value.weather)) ||
     !(value.calendar === undefined || value.calendar === null || isCalendarState(value.calendar)) ||
     !(value.football === undefined || value.football === null || isFootballState(value.football)) ||
+    !(value.news === undefined || value.news === null || isNewsState(value.news)) ||
+    !(value.live_events === undefined || (Array.isArray(value.live_events) && value.live_events.every(isLiveEvent))) ||
     !(value.time_policy === undefined || isTimePolicyState(value.time_policy)) ||
     !(value.core_host === undefined || value.core_host === null || isCoreHostState(value.core_host)) ||
     !(value.network === undefined || value.network === null || isNetworkState(value.network)) ||
@@ -422,6 +480,8 @@ export function parseStateMessage(rawMessage: string): OlympusState | null {
     weather: (value.weather as WeatherState | null | undefined) ?? null,
     calendar: (value.calendar as CalendarState | null | undefined) ?? null,
     football: (value.football as FootballState | null | undefined) ?? null,
+    news: (value.news as NewsState | null | undefined) ?? null,
+    live_events: (value.live_events as LiveEvent[] | undefined) ?? [],
     time_policy: (value.time_policy as TimePolicyState | undefined) ?? {
       is_night: false,
       period_started_at: null,
@@ -444,7 +504,7 @@ export function parseStateMessage(rawMessage: string): OlympusState | null {
 export function parseDisplayMessage(rawMessage: string): OlympusState | DisplayEventMessage | null {
   let value: unknown;
   try { value = JSON.parse(rawMessage); } catch { return null; }
-  if (isRecord(value) && value.type === "event" && (isGameplayEvent(value.event) || isFootballDisplayEvent(value.event))) {
+  if (isRecord(value) && value.type === "event" && (isGameplayEvent(value.event) || isFootballDisplayEvent(value.event) || isNewsDisplayEvent(value.event))) {
     return value as unknown as DisplayEventMessage;
   }
   return parseStateMessage(rawMessage);

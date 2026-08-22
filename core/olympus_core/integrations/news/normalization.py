@@ -35,13 +35,22 @@ class _PlainText(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
+        self.ignored_depth = 0
 
     def handle_data(self, data: str) -> None:
-        self.parts.append(data)
+        if self.ignored_depth == 0:
+            self.parts.append(data)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"script", "style"}:
+            self.ignored_depth += 1
+            return
         if tag in {"br", "p", "div", "li"}:
             self.parts.append(" ")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"script", "style"} and self.ignored_depth > 0:
+            self.ignored_depth -= 1
 
 
 def clean_text(value: Any, *, limit: int | None = None) -> str | None:
