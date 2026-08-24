@@ -154,6 +154,41 @@ Keep Spotify, Google, and football credentials in
 missing credentials do not prevent local Core, Display, Night policy, Agents,
 or monitoring from starting.
 
+### Football provider on Hermes
+
+football-data.org is the recommended free fixture provider for current FC
+Bayern matches. Its team ID for FC Bayern München is `5`; API-Football's `157`
+is a different provider namespace and must not be reused.
+
+Configure the repository-installed `/etc/olympus/config.toml` only during the
+normal deployment/configuration procedure:
+
+```toml
+[football]
+enabled = true
+provider = "football-data"
+team_id = "5"
+tracked_id = "bayern"
+team_name = "FC Bayern München"
+team_short_name = "Bayern"
+team_code = "FCB"
+timezone = "Europe/Berlin"
+```
+
+Add the credential separately to `/etc/olympus/secrets.env`:
+
+```dotenv
+OLYMPUS_FOOTBALL_DATA_API_KEY=replace_with_the_real_key_on_hermes
+```
+
+The provider uses the official v4 team-matches resource and `X-Auth-Token`
+authentication. Basic fixtures, status, kickoff, and scores remain operational
+when the free tier omits rich lineups, events, statistics, or player ratings.
+Its polling cadence never exceeds one request per minute, slows after full-time,
+and honors rate-limit reset guidance. Existing API-Football deployments continue
+to use team `157`, `OLYMPUS_FOOTBALL_API_KEY`, and may set `season` to the
+competition season's starting year when API-Football requires that field.
+
 After a configuration change:
 
 ```bash

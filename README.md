@@ -442,20 +442,22 @@ physical monitor brightness, audio, HDMI/display power, or any room hardware.
 
 ## Matchday
 
-Olympus v0.10 provides an optional, read-only FC Bayern München match center
-backed by [API-Football v3](https://www.api-football.com/documentation-v3).
-Core owns the provider boundary and converts fixtures, score, events, lineups,
-team statistics, and player performance into Olympus models before anything
-reaches the Display. Provider-specific response shapes and credentials never
-reach the browser.
+Olympus provides an optional, read-only FC Bayern München match center backed by
+either [football-data.org v4](https://docs.football-data.org/general/v4/index.html)
+or [API-Football v3](https://www.api-football.com/documentation-v3). Core owns
+the provider boundary and converts provider responses into the same Olympus
+models before anything reaches the Display. Provider-specific response shapes,
+team IDs, and credentials never reach the browser.
 
 Enable the provider in the ignored `core/config.toml`:
 
 ```toml
 [football]
 enabled = true
-provider = "api-football"
-team_id = "157"
+provider = "football-data"
+# football-data.org team ID for FC Bayern München. This is not interchangeable
+# with API-Football's team ID.
+team_id = "5"
 tracked_id = "bayern"
 team_name = "FC Bayern München"
 team_short_name = "Bayern"
@@ -480,19 +482,49 @@ pre_match_minutes = 60
 post_match_minutes = 20
 
 [football.players]
-# Stable API-Football player IDs are authoritative. Names are supported only
-# as a convenient option for development fixtures.
-watched = ["player-id-1", "player-id-2"]
+# football-data.org does not provide Olympus' rich player-performance contract
+# on the free fixture path, so watched-player analytics remain unavailable.
+watched = []
 rating_change_threshold = 0.25
 ```
 
-Put the API key in `core/.env`, never in TOML or browser code:
+Put the dedicated API key in `core/.env`, never in TOML or browser code:
+
+```dotenv
+OLYMPUS_FOOTBALL_DATA_API_KEY=your_football_data_org_key
+```
+
+Then start Core with `--env-file .env`. The football-data.org provider supports
+current and upcoming fixtures, home/away teams, competitions, kickoff times,
+match phases, and running/final scores. FC Bayern München is team `5` in
+football-data.org. Optional unfolded goals, cards, substitutions, and lineups
+are normalized when the response includes them. Missing free-tier coverage
+leaves events, lineups, team statistics, and player analytics empty or
+unavailable without disabling basic Matchday.
+
+Paid API-Football support remains available with its separate credential and
+provider-specific team ID:
+
+```toml
+[football]
+enabled = true
+provider = "api-football"
+team_id = "157"
+# API-Football season values are starting years; this is optional for backward
+# compatibility but should be set when the provider requires the Season field.
+season = 2025
+tracked_id = "bayern"
+team_name = "FC Bayern München"
+team_short_name = "Bayern"
+team_code = "FCB"
+timezone = "Europe/Berlin"
+```
 
 ```dotenv
 OLYMPUS_FOOTBALL_API_KEY=your_api_football_key
 ```
 
-Then start Core with `--env-file .env`. Player performance uses the provider's
+API-Football player performance uses the provider's
 fixture player-statistics data, including available minutes, ratings, goals,
 assists, shots, passing, defending, duels, dribbles, cards, and penalties for
 both teams. Every field is optional. Missing coverage removes the corresponding
@@ -500,14 +532,18 @@ presentation rather than manufacturing a zero or an error panel. Ratings are
 always described as provider performance ratings, not objective judgments or an
 official Player of the Match award.
 
-Polling adapts to match proximity. Score, status, and events keep the fast live
-cadence (15 seconds by default), while team and player analytics are sampled at
-their slower 60-second update cadence. A combined fixture response avoids extra
-endpoint calls; Core freezes a usable lineup and does not duplicate unchanged
-history samples. Provider quota headers are retained in diagnostics. Low quota
-stretches analytics first, then the fast poll only when the budget is critical.
-`429` responses respect provider retry guidance. Timeouts and outages retain the
-last trusted state, mark it stale, and recover without destabilizing Core.
+Polling adapts to match proximity. API-Football score, status, and events keep
+the configured fast live cadence (15 seconds by default), while team and player
+analytics are sampled at their slower 60-second update cadence. A combined
+fixture response avoids extra endpoint calls; Core freezes a usable lineup and
+does not duplicate unchanged history samples. Provider quota headers are
+retained in diagnostics. Low quota stretches analytics first, then the fast poll
+only when the budget is critical.
+football-data.org is clamped to at most one request per minute, including live
+matches, and slows to five minutes after full-time to stay comfortably inside
+its free-tier rate limit. `429` responses respect provider reset guidance.
+Timeouts and outages retain the last trusted state, mark it stale, and recover
+without destabilizing Core.
 
 More than 60 minutes before kickoff, Idle and Night may show a subtle next-match
 note without a scene takeover. During pre-match and the 20-minute post-match

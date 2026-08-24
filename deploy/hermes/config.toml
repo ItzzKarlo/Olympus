@@ -38,6 +38,9 @@ weekend_days = ["friday", "saturday"]
 [football]
 enabled = false
 provider = "api-football"
+# Provider-specific FC Bayern IDs: API-Football = 157; football-data.org = 5.
+# If switching provider, change both provider and team_id. API-Football users
+# can add season = <starting year> when their plan requires it.
 team_id = "157"
 tracked_id = "bayern"
 team_name = "FC Bayern München"

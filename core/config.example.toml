@@ -44,11 +44,15 @@ weekend_days = ["friday", "saturday"]
 
 [football]
 enabled = false
-provider = "api-football"
+provider = "football-data"
 # Development simulation: set provider = "fixture" and configure
 # OLYMPUS_FOOTBALL_FIXTURE_PATH in .env.
-# API-Football provider team ID for FC Bayern München.
-team_id = "157"
+# Team IDs are provider-specific. FC Bayern München is 5 on football-data.org
+# and 157 on API-Football.
+team_id = "5"
+# API-Football requires a season starting year for some fixture queries. When
+# using that provider, set (for example) season = 2025 for the 2025/26 season.
+# season = 2025
 tracked_id = "bayern"
 team_name = "FC Bayern München"
 team_short_name = "Bayern"
@@ -74,8 +78,8 @@ pre_match_minutes = 60
 post_match_minutes = 20
 
 [football.players]
-# Stable API-Football player IDs are authoritative. Names also work for local
-# development fixtures, but should not be relied on across squad changes.
+# Rich player performance is API-Football/fixture-only. football-data.org keeps
+# these optional fields unavailable rather than manufacturing data.
 watched = []
 rating_change_threshold = 0.25
 
