@@ -99,10 +99,7 @@ class ServiceCollector:
                     source=service.id,
                     payload={"service_id": service.id, "service_name": service.name},
                 )
-            elif (
-                transition.current == ProbeStatus.UP
-                and transition.previous == ProbeStatus.DOWN
-            ):
+            elif transition.current == ProbeStatus.UP:
                 await self._events.resolve_incident(
                     f"service:{service.id}",
                     event_type="service.restored",
