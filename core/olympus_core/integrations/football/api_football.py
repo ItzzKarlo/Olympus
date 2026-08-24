@@ -22,6 +22,8 @@ class ApiFootballProvider:
     """Small API-Football v3 boundary; provider payloads stop here."""
 
     API_BASE = "https://v3.football.api-sports.io"
+    minimum_poll_seconds = 0.0
+    post_match_minimum_poll_seconds = 0.0
 
     def __init__(
         self,
@@ -75,7 +77,7 @@ class ApiFootballProvider:
                 headers={"x-apisports-key": self._settings.api_key},
             )
         except httpx.HTTPError as error:
-            raise FootballProviderError("API-Football is temporarily unavailable") from error
+            raise FootballProviderError(f"API-Football request failed for {path}") from error
         self._capture_quota(response)
         if response.status_code == 429:
             retry = response.headers.get("retry-after")
@@ -85,30 +87,48 @@ class ApiFootballProvider:
                 retry_after = None
             raise FootballRateLimitError("API-Football rate limit reached", retry_after)
         if response.status_code in {401, 403}:
-            raise FootballProviderError("API-Football rejected the configured credentials")
+            raise FootballProviderError(f"API-Football rejected credentials for {path}")
+        if response.status_code >= 500:
+            raise FootballProviderError(
+                f"API-Football upstream error {response.status_code} for {path}"
+            )
+        if response.status_code >= 400:
+            raise FootballProviderError(
+                f"API-Football request error {response.status_code} for {path}"
+            )
         try:
             response.raise_for_status()
             payload = response.json()
         except (httpx.HTTPError, ValueError) as error:
-            raise FootballProviderError("API-Football returned an invalid response") from error
+            raise FootballProviderError(f"API-Football returned an invalid response for {path}") from error
         if not isinstance(payload, Mapping):
-            raise FootballProviderError("API-Football returned an invalid response")
+            raise FootballProviderError(f"API-Football returned an invalid response for {path}")
         errors = payload.get("errors")
         if (isinstance(errors, Mapping) and errors) or (isinstance(errors, list) and errors):
-            raise FootballProviderError("API-Football reported a provider error")
+            details = "; ".join(str(value) for value in (
+                errors.values() if isinstance(errors, Mapping) else errors
+            ))[:240]
+            if self._settings.api_key:
+                details = details.replace(self._settings.api_key, "[redacted]")
+            raise FootballProviderError(
+                f"API-Football provider error for {path}: {details or 'unspecified error'}"
+            )
         values = payload.get("response")
         if not isinstance(values, list):
-            raise FootballProviderError("API-Football returned an invalid response")
+            raise FootballProviderError(f"API-Football returned an invalid response for {path}")
         return values
 
     async def _refresh_schedule(self, now: datetime) -> None:
         local_day = now.astimezone(ZoneInfo(self._settings.timezone)).date()
-        values = await self._get("/fixtures", {
+        params: dict[str, Any] = {
             "team": self._settings.team_id,
             "from": (local_day - timedelta(days=2)).isoformat(),
             "to": (local_day + timedelta(days=90)).isoformat(),
             "timezone": self._settings.timezone,
-        })
+        }
+        if self._settings.season is not None:
+            params["season"] = self._settings.season
+        values = await self._get("/fixtures", params)
         self._schedule = values
         self._schedule_refreshed_at = self._monotonic()
 

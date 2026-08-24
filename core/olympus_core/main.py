@@ -12,7 +12,7 @@ from olympus_core.display.static import install_display_routes
 from olympus_core.integrations.spotify import SpotifyApi, SpotifyCollector
 from olympus_core.integrations.weather import OpenMeteoApi, WeatherCollector
 from olympus_core.integrations.calendar import CalendarCollector, GoogleCalendarApi
-from olympus_core.integrations.football import ApiFootballProvider, FixtureFootballProvider, FootballCollector
+from olympus_core.integrations.football import FootballCollector, create_football_provider
 from olympus_core.integrations.news import FixtureNewsProvider, NewsCollector, RssNewsProvider
 from olympus_core.monitoring.config import load_monitoring_config
 from olympus_core.monitoring.runtime import MonitoringRuntime
@@ -245,11 +245,7 @@ async def lifespan(_app: FastAPI):
     football_collector: FootballCollector | None = None
     football_task: asyncio.Task[None] | None = None
     if core_settings.football.configured:
-        football_provider = (
-            FixtureFootballProvider(core_settings.football)
-            if core_settings.football.provider == "fixture"
-            else ApiFootballProvider(core_settings.football)
-        )
+        football_provider = create_football_provider(core_settings.football)
         football_collector = FootballCollector(
             core_settings.football,
             football_provider,
@@ -260,7 +256,10 @@ async def lifespan(_app: FastAPI):
             football_collector.run(), name="football-collector"
         )
     elif core_settings.football.enabled:
-        logger.warning("Football collector disabled because provider configuration or API key is incomplete")
+        logger.error(
+            "Football collector disabled: %s",
+            core_settings.football.configuration_issue or "configuration is incomplete",
+        )
     else:
         logger.info("Football collector disabled")
 

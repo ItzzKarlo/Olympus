@@ -224,6 +224,23 @@ class ApiFootballProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.quota.minute_remaining, 289)
         self.assertTrue(state.quota.low)
 
+    async def test_includes_configured_season_without_hard_coding_one(self) -> None:
+        from dataclasses import replace
+
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(200, json={"errors": {}, "response": [raw_fixture("NS")]})
+
+        provider = ApiFootballProvider(
+            replace(SETTINGS, season=2025),
+            httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        )
+        await provider.fetch()
+
+        self.assertEqual(requests[0].url.params["season"], "2025")
+
 
 class FixtureFootballProviderTests(unittest.IsolatedAsyncioTestCase):
     async def test_development_fixture_can_simulate_critical_quota(self) -> None:

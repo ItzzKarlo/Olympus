@@ -20,6 +20,9 @@ from olympus_core.models.football import FootballQuotaState, FootballTeam, Match
 class FixtureFootballProvider:
     """Development-only file provider for end-to-end Matchday simulation."""
 
+    minimum_poll_seconds = 0.0
+    post_match_minimum_poll_seconds = 0.0
+
     def __init__(self, settings: FootballSettings) -> None:
         self._settings = settings
         self._path = Path(settings.fixture_path or "")

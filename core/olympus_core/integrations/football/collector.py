@@ -121,6 +121,11 @@ class FootballCollector:
         self._seen_event_ids: set[str] = set()
         self._lineup_available = False
         self._analytics = FootballAnalytics(settings)
+        self._minimum_poll_seconds = max(0.0, getattr(provider, "minimum_poll_seconds", 0.0))
+        self._post_match_minimum_poll_seconds = max(
+            self._minimum_poll_seconds,
+            getattr(provider, "post_match_minimum_poll_seconds", 0.0),
+        )
 
     async def _publish(self, state: FootballState) -> FootballState:
         if state != self._published:
@@ -245,8 +250,17 @@ class FootballCollector:
         return published
 
     def poll_interval(self, state: FootballState, now: datetime | None = None) -> float:
+        minimum = (
+            self._post_match_minimum_poll_seconds
+            if state.matchday is not None and state.matchday.phase == MatchPhase.POST_MATCH
+            else self._minimum_poll_seconds
+        )
         if self._retry_after is not None:
-            return max(self._retry_after, self._settings.poll_pre_match_seconds)
+            return max(
+                self._retry_after,
+                self._settings.poll_pre_match_seconds,
+                minimum,
+            )
         if state.matchday is not None:
             interval = {
                 MatchPhase.LIVE: self._settings.poll_live_seconds,
@@ -256,14 +270,14 @@ class FootballCollector:
                 MatchPhase.POST_MATCH: self._settings.poll_post_match_seconds,
             }.get(state.matchday.phase, self._settings.poll_post_match_seconds)
             if state.quota and state.quota.critical:
-                return max(interval, 60.0)
+                return max(interval, 60.0, minimum)
             if state.quota and state.quota.low:
-                return max(interval, 30.0)
-            return interval
+                return max(interval, 30.0, minimum)
+            return max(interval, minimum)
         current = now or datetime.now(timezone.utc)
         if state.next_match is not None and state.next_match.kickoff - current <= timedelta(hours=24):
-            return self._settings.poll_near_match_seconds
-        return self._settings.poll_upcoming_seconds
+            return max(self._settings.poll_near_match_seconds, minimum)
+        return max(self._settings.poll_upcoming_seconds, minimum)
 
     async def run(self) -> None:
         logger.info("Football collector enabled for %s", self._settings.team_name)

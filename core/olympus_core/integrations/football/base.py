@@ -4,6 +4,9 @@ from olympus_core.models.football import ProviderFootballSnapshot
 
 
 class FootballProvider(Protocol):
+    minimum_poll_seconds: float
+    post_match_minimum_poll_seconds: float
+
     async def fetch(self) -> ProviderFootballSnapshot: ...
     async def aclose(self) -> None: ...
 

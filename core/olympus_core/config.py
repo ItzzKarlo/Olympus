@@ -123,7 +123,9 @@ class FootballSettings:
     team_code: str = "FCB"
     timezone: str = DEFAULT_TIMEZONE
     api_key: str | None = None
+    football_data_api_key: str | None = None
     fixture_path: str | None = None
+    season: int | None = None
     matchday: FootballMatchdaySettings = FootballMatchdaySettings()
     players: FootballPlayerSettings = FootballPlayerSettings()
     poll_upcoming_seconds: float = 1_800.0
@@ -147,8 +149,24 @@ class FootballSettings:
         return (
             self.provider == "api-football" and bool(self.api_key)
         ) or (
+            self.provider == "football-data" and bool(self.football_data_api_key)
+        ) or (
             self.provider == "fixture" and bool(self.fixture_path)
         )
+
+    @property
+    def configuration_issue(self) -> str | None:
+        if self.provider not in {"api-football", "football-data", "fixture"}:
+            return f"unsupported football provider: {self.provider!r}"
+        if not self.team_id:
+            return "football.team_id is required"
+        if self.provider == "api-football" and not self.api_key:
+            return "api-football requires OLYMPUS_FOOTBALL_API_KEY"
+        if self.provider == "football-data" and not self.football_data_api_key:
+            return "football-data requires OLYMPUS_FOOTBALL_DATA_API_KEY"
+        if self.provider == "fixture" and not self.fixture_path:
+            return "fixture requires OLYMPUS_FOOTBALL_FIXTURE_PATH"
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -343,6 +361,16 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
     calendar_data = _mapping(data.get("calendar"))
     night_data = _mapping(data.get("night"))
     football_data = _mapping(data.get("football"))
+    football_provider = str(football_data.get("provider", "api-football")).strip().lower()
+    if football_provider not in {"api-football", "football-data", "fixture"}:
+        raise ValueError(f"Unsupported football provider: {football_provider!r}")
+    raw_football_season = football_data.get("season")
+    if raw_football_season is not None and (
+        isinstance(raw_football_season, bool)
+        or not isinstance(raw_football_season, int)
+        or not 1900 <= raw_football_season <= 2200
+    ):
+        raise ValueError("football.season must be a four-digit starting year")
     matchday_data = _mapping(football_data.get("matchday"))
     player_data = _mapping(football_data.get("players"))
     news_data = _mapping(data.get("news"))
@@ -450,7 +478,7 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
         ),
         football=FootballSettings(
             enabled=bool(football_data.get("enabled", False)),
-            provider=str(football_data.get("provider", "api-football")).strip().lower(),
+            provider=football_provider,
             team_id=str(football_data.get("team_id", "157")).strip(),
             tracked_id=str(football_data.get("tracked_id", "bayern")).strip() or "bayern",
             team_name=str(football_data.get("team_name", "FC Bayern München")).strip() or "FC Bayern München",
@@ -458,7 +486,9 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
             team_code=str(football_data.get("team_code", "FCB")).strip() or "FCB",
             timezone=_timezone(football_data.get("timezone"), timezone),
             api_key=os.getenv("OLYMPUS_FOOTBALL_API_KEY") or None,
+            football_data_api_key=os.getenv("OLYMPUS_FOOTBALL_DATA_API_KEY") or None,
             fixture_path=os.getenv("OLYMPUS_FOOTBALL_FIXTURE_PATH") or None,
+            season=raw_football_season,
             matchday=FootballMatchdaySettings(
                 pre_match_minutes=_positive_int(matchday_data.get("pre_match_minutes"), 60),
                 post_match_minutes=_positive_int(matchday_data.get("post_match_minutes"), 20),
