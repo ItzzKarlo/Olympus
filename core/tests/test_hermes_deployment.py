@@ -49,6 +49,9 @@ class HermesScriptTests(unittest.TestCase):
         core: Path,
         database: Path,
         config: Path,
+        *,
+        version: str = "1.0.0",
+        revision: str = REVISION,
     ) -> tuple[Path, dict[str, str], Path]:
         release = root / "release"
         scripts = release / "scripts" / "hermes"
@@ -57,30 +60,58 @@ class HermesScriptTests(unittest.TestCase):
         shutil.copy(HERMES_SCRIPTS / "release_metadata.py", scripts / "release_metadata.py")
         installer = (HERMES_SCRIPTS / "install.sh").read_text(encoding="utf-8")
         installer = installer.replace("/opt/olympus/current/core", str(core))
+        installer = installer.replace("/opt/olympus", str(root / "opt" / "olympus"))
         installer = installer.replace("/var/lib/olympus/core.db", str(database))
         installer = installer.replace("/etc/olympus/config.toml", str(config))
         install_path = scripts / "install.sh"
         install_path.write_text(installer, encoding="utf-8")
         install_path.chmod(0o755)
         (scripts / "admin.sh").chmod(0o755)
-        (release / "VERSION").write_text("1.0.0\n", encoding="ascii")
+        (release / "VERSION").write_text(f"{version}\n", encoding="ascii")
         (release / "RELEASE-METADATA.json").write_text(json.dumps({
-            "revision": REVISION,
+            "revision": revision,
             "source_tree": "clean",
-            "version": "1.0.0",
+            "version": version,
         }), encoding="ascii")
 
         fake_bin = root / "fake-bin"
         fake_bin.mkdir()
         commands = {
             "id": "#!/bin/sh\nif [ \"${1:-}\" = -u ]; then echo 0; fi\nexit 0\n",
-            "install": "#!/bin/sh\nexit 0\n",
+            "install": (
+                "#!/bin/sh\n"
+                "if [ \"${1:-}\" = -d ]; then\n"
+                "    for target in \"$@\"; do :; done\n"
+                "    mkdir -p \"$target\"\n"
+                "fi\n"
+                "exit 0\n"
+            ),
             "getent": "#!/bin/sh\nexit 1\n",
             "df": (
                 "#!/bin/sh\n"
                 "/usr/bin/touch \"$TEST_DF_MARKER\"\n"
                 "echo 'Filesystem 1024-blocks Used Available Capacity Mounted on'\n"
-                "echo 'test 2 1 1 50% /opt'\n"
+                "echo \"test 2000000 1 $TEST_AVAILABLE_KB 1% /opt\"\n"
+            ),
+            "python3": (
+                "#!/bin/sh\n"
+                "if [ \"${1:-}\" = -m ] && [ \"${2:-}\" = venv ]; then\n"
+                "    mkdir -p \"$3/bin\"\n"
+                "    printf '#!/bin/sh\\nexit 0\\n' > \"$3/bin/python\"\n"
+                "    chmod 0755 \"$3/bin/python\"\n"
+                "    exit 0\n"
+                "fi\n"
+                "exec \"$TEST_REAL_PYTHON\" \"$@\"\n"
+            ),
+            "chown": "#!/bin/sh\nexit 0\n",
+            "systemctl": "#!/bin/sh\nexit 0\n",
+            "mv": (
+                "#!/bin/sh\n"
+                "if [ \"${1:-}\" = -Tf ]; then\n"
+                "    /bin/rm -f \"$3\"\n"
+                "    exec /bin/mv \"$2\" \"$3\"\n"
+                "fi\n"
+                "exec /bin/mv \"$@\"\n"
             ),
         }
         for name, source in commands.items():
@@ -91,7 +122,9 @@ class HermesScriptTests(unittest.TestCase):
         environment = {
             **os.environ,
             "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+            "TEST_AVAILABLE_KB": "1",
             "TEST_DF_MARKER": str(marker),
+            "TEST_REAL_PYTHON": sys.executable,
         }
         return install_path, environment, marker
 
@@ -276,6 +309,138 @@ printf '%s\n' "$@" > "$CAGE_ARGUMENTS"
             self.assertIn(f"Revision: {REVISION}", result.stdout)
             self.assertIn("Kiosk enable requested: 1", result.stdout)
             self.assertEqual(before, sorted(release.iterdir()))
+
+    def test_installer_reuses_same_version_with_identical_provenance_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            core = self.production_core_fixture(root)
+            config, database, _backups = self.production_config(root)
+            installer, environment, marker = self.installer_fixture(
+                root, core, database, config
+            )
+            target = root / "opt" / "olympus" / "releases" / "1.0.0"
+            target.mkdir(parents=True)
+            (target / "VERSION").write_text("1.0.0\n", encoding="ascii")
+            (target / "RELEASE-METADATA.json").write_text(json.dumps({
+                "revision": REVISION,
+                "source_tree": "clean",
+                "version": "1.0.0",
+            }), encoding="ascii")
+            (target / "installed-content").write_text("immutable\n", encoding="utf-8")
+            current = root / "opt" / "olympus" / "current"
+            current.symlink_to("releases/1.0.0")
+            before = {
+                path.relative_to(target): path.read_bytes()
+                for path in target.rglob("*")
+                if path.is_file()
+            }
+
+            result = subprocess.run(
+                [installer, "--no-start"],
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("identical provenance; reusing it unchanged", result.stdout)
+            self.assertFalse(marker.exists())
+            self.assertEqual(current.readlink(), Path("releases/1.0.0"))
+            self.assertEqual(before, {
+                path.relative_to(target): path.read_bytes()
+                for path in target.rglob("*")
+                if path.is_file()
+            })
+
+    def test_installer_rejects_same_version_with_different_provenance_before_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            core = self.production_core_fixture(root)
+            config, database, _backups = self.production_config(root)
+            installer, environment, marker = self.installer_fixture(
+                root, core, database, config
+            )
+            target = root / "opt" / "olympus" / "releases" / "1.0.0"
+            target.mkdir(parents=True)
+            (target / "VERSION").write_text("1.0.0\n", encoding="ascii")
+            (target / "RELEASE-METADATA.json").write_text(json.dumps({
+                "revision": "b" * 40,
+                "source_tree": "clean",
+                "version": "1.0.0",
+            }), encoding="ascii")
+            (target / "installed-content").write_text("original\n", encoding="utf-8")
+            current = root / "opt" / "olympus" / "current"
+            current.symlink_to("releases/1.0.0")
+            before = {
+                path.relative_to(target): path.read_bytes()
+                for path in target.rglob("*")
+                if path.is_file()
+            }
+
+            result = subprocess.run(
+                [installer, "--no-start"],
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("different provenance", result.stderr)
+            self.assertFalse(marker.exists())
+            self.assertEqual(current.readlink(), Path("releases/1.0.0"))
+            self.assertEqual(before, {
+                path.relative_to(target): path.read_bytes()
+                for path in target.rglob("*")
+                if path.is_file()
+            })
+
+    def test_installer_installs_new_version_without_mutating_previous_release(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            core = self.production_core_fixture(root)
+            config, database, _backups = self.production_config(root)
+            installer, environment, marker = self.installer_fixture(
+                root,
+                core,
+                database,
+                config,
+                version="1.0.1",
+                revision="c" * 40,
+            )
+            environment["TEST_AVAILABLE_KB"] = "1999999"
+            previous = root / "opt" / "olympus" / "releases" / "1.0.0"
+            previous.mkdir(parents=True)
+            (previous / "VERSION").write_text("1.0.0\n", encoding="ascii")
+            (previous / "RELEASE-METADATA.json").write_text(json.dumps({
+                "revision": REVISION,
+                "source_tree": "clean",
+                "version": "1.0.0",
+            }), encoding="ascii")
+            (previous / "installed-content").write_text("preserved\n", encoding="utf-8")
+            current = root / "opt" / "olympus" / "current"
+            current.symlink_to("releases/1.0.0")
+
+            result = subprocess.run(
+                [installer, "--no-start"],
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue(marker.exists())
+            self.assertEqual(current.readlink(), Path("releases/1.0.1"))
+            self.assertEqual(
+                (previous / "installed-content").read_text(encoding="utf-8"),
+                "preserved\n",
+            )
+            installed = root / "opt" / "olympus" / "releases" / "1.0.1"
+            self.assertEqual(json.loads(
+                (installed / "RELEASE-METADATA.json").read_text(encoding="ascii")
+            )["revision"], "c" * 40)
 
     def test_installer_runs_pre_update_backup_outside_core_tree(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

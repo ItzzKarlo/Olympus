@@ -47,6 +47,26 @@ METADATA_JSON=$(python3 "$RELEASE_DIR/scripts/hermes/release_metadata.py" valida
     --version-file "$RELEASE_DIR/VERSION" \
     --require-clean)
 REVISION=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["revision"])' "$METADATA_JSON")
+TARGET=/opt/olympus/releases/$VERSION
+TARGET_EXISTS=0
+if [ -e "$TARGET" ] || [ -L "$TARGET" ]; then
+    if [ -L "$TARGET" ] || [ ! -d "$TARGET" ]; then
+        echo "Existing release target is not an immutable release directory: $TARGET" >&2
+        exit 1
+    fi
+    if ! EXISTING_METADATA_JSON=$(python3 "$RELEASE_DIR/scripts/hermes/release_metadata.py" validate \
+        --metadata "$TARGET/RELEASE-METADATA.json" \
+        --version-file "$TARGET/VERSION" \
+        --require-clean); then
+        echo "Existing release $TARGET has invalid provenance; refusing to modify it." >&2
+        exit 1
+    fi
+    if [ "$EXISTING_METADATA_JSON" != "$METADATA_JSON" ]; then
+        echo "Release $VERSION already exists with different provenance; refusing to overwrite it." >&2
+        exit 1
+    fi
+    TARGET_EXISTS=1
+fi
 
 if [ "$DRY_RUN" -eq 1 ]; then
     echo "Olympus Hermes deployment plan"
@@ -127,23 +147,26 @@ if [ -f /var/lib/olympus/core.db ] && [ -x /opt/olympus/current/core/.venv/bin/p
         --core-dir /opt/olympus/current/core backup
 fi
 
-AVAILABLE_KB=$(df -Pk /opt | awk 'NR == 2 {print $4}')
-RELEASE_KB=$(du -sk "$RELEASE_DIR" | awk '{print $1}')
-REQUIRED_KB=$((RELEASE_KB * 3 + 262144))
-if [ "$AVAILABLE_KB" -lt "$REQUIRED_KB" ]; then
-    echo "Insufficient free space for a safe side-by-side Olympus release." >&2
-    exit 1
-fi
+if [ "$TARGET_EXISTS" -eq 0 ]; then
+    AVAILABLE_KB=$(df -Pk /opt | awk 'NR == 2 {print $4}')
+    RELEASE_KB=$(du -sk "$RELEASE_DIR" | awk '{print $1}')
+    REQUIRED_KB=$((RELEASE_KB * 3 + 262144))
+    if [ "$AVAILABLE_KB" -lt "$REQUIRED_KB" ]; then
+        echo "Insufficient free space for a safe side-by-side Olympus release." >&2
+        exit 1
+    fi
 
-TARGET=/opt/olympus/releases/$VERSION
-install -d -o root -g olympus -m 0755 "$TARGET"
-if [ "$RELEASE_DIR" != "$TARGET" ]; then
-    cp -a "$RELEASE_DIR/." "$TARGET/"
+    install -d -o root -g olympus -m 0755 "$TARGET"
+    if [ "$RELEASE_DIR" != "$TARGET" ]; then
+        cp -a "$RELEASE_DIR/." "$TARGET/"
+    fi
+    python3 -m venv "$TARGET/core/.venv"
+    "$TARGET/core/.venv/bin/python" -m pip install -r "$TARGET/core/requirements.txt"
+    chown -R root:root "$TARGET"
+    find "$TARGET/scripts" -type f -name '*.sh' -exec chmod 0755 {} +
+else
+    echo "Release $VERSION already exists with identical provenance; reusing it unchanged."
 fi
-python3 -m venv "$TARGET/core/.venv"
-"$TARGET/core/.venv/bin/python" -m pip install -r "$TARGET/core/requirements.txt"
-chown -R root:root "$TARGET"
-find "$TARGET/scripts" -type f -name '*.sh' -exec chmod 0755 {} +
 
 ln -sfn "releases/$VERSION" /opt/olympus/current.next
 mv -Tf /opt/olympus/current.next /opt/olympus/current

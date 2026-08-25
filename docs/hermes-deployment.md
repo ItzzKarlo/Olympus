@@ -18,7 +18,7 @@ attached.
 ## Production shape
 
 ```text
-/opt/olympus/releases/1.0.0/   replaceable application release
+/opt/olympus/releases/1.0.0/   immutable application release
 /opt/olympus/current           atomic symlink to the active release
 /opt/olympus/current/RELEASE-METADATA.json  immutable build provenance
 /etc/olympus/config.toml       non-secret production configuration
@@ -366,6 +366,11 @@ SQLite backup when a current production DB exists. It installs the new release
 side by side, builds its Linux ARM64 venv, switches `/opt/olympus/current`
 atomically, and verifies Core health. It never deletes prior releases or durable
 state, so at least the previous application tree remains available.
+
+A versioned release directory is immutable once created. Reinstalling an artifact
+with identical version, revision, and source-tree provenance reuses it without
+modification. A different revision using the same version is rejected before the
+existing directory or `current` symlink can change; assign a new version instead.
 
 Application rollback means repointing `current` to a known release and restarting
 Core. Do not roll application code backward across an incompatible database
