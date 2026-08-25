@@ -32,7 +32,7 @@ monitor_connected() {
 }
 
 if [ "${1:-}" = "--print-command" ] || [ "${OLYMPUS_KIOSK_DRY_RUN:-0}" = "1" ]; then
-    printf '%s\n' "$CAGE -d -s -x -- $BROWSER --ozone-platform=wayland --kiosk --no-first-run --noerrdialogs --disable-session-crashed-bubble --disable-translate --overscroll-history-navigation=0 --user-data-dir=$PROFILE $CORE_URL/"
+    printf '%s\n' "$CAGE -d -s -- $BROWSER --ozone-platform=wayland --kiosk --no-first-run --noerrdialogs --disable-session-crashed-bubble --disable-translate --overscroll-history-navigation=0 --user-data-dir=$PROFILE $CORE_URL/"
     exit 0
 fi
 if [ "${1:-}" = "--check-monitor" ]; then
@@ -62,7 +62,7 @@ if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
 fi
 mkdir -p "$PROFILE"
 
-exec "$CAGE" -d -s -x -- "$BROWSER" \
+exec "$CAGE" -d -s -- "$BROWSER" \
     --ozone-platform=wayland \
     --kiosk \
     --no-first-run \

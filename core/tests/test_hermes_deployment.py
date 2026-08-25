@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import shlex
 import sqlite3
 import subprocess
 import sys
@@ -124,7 +125,7 @@ class HermesScriptTests(unittest.TestCase):
         self.assertIn('RELEASE-METADATA.json', builder)
         self.assertNotIn('agents/common', builder)
 
-    def test_kiosk_command_keeps_chromium_sandbox_and_uses_wayland(self) -> None:
+    def test_kiosk_command_is_cage_021_compatible_and_keeps_chromium_arguments(self) -> None:
         environment = {
             **os.environ,
             "CAGE_BIN": "/usr/bin/cage",
@@ -138,10 +139,76 @@ class HermesScriptTests(unittest.TestCase):
             text=True,
             check=True,
         )
-        self.assertIn("--ozone-platform=wayland", result.stdout)
-        self.assertIn("--kiosk", result.stdout)
-        self.assertIn("http://127.0.0.1:8000/", result.stdout)
+        self.assertEqual(shlex.split(result.stdout), [
+            "/usr/bin/cage",
+            "-d",
+            "-s",
+            "--",
+            "/snap/bin/chromium",
+            "--ozone-platform=wayland",
+            "--kiosk",
+            "--no-first-run",
+            "--noerrdialogs",
+            "--disable-session-crashed-bubble",
+            "--disable-translate",
+            "--overscroll-history-navigation=0",
+            "--user-data-dir=/home/kiosk/profile",
+            "http://127.0.0.1:8000/",
+        ])
+        self.assertNotIn("-x", shlex.split(result.stdout))
         self.assertNotIn("--no-sandbox", result.stdout)
+
+    def test_kiosk_exec_path_is_accepted_by_cage_021_argument_surface(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            drm = root / "drm" / "card0-HDMI-A-1"
+            drm.mkdir(parents=True)
+            (drm / "status").write_text("connected\n", encoding="ascii")
+            cage = root / "cage-0.2.1"
+            arguments = root / "cage-arguments"
+            cage.write_text(
+                """#!/bin/sh
+for argument in "$@"; do
+    [ "$argument" != "-x" ] || exit 64
+done
+printf '%s\n' "$@" > "$CAGE_ARGUMENTS"
+""",
+                encoding="ascii",
+            )
+            cage.chmod(0o755)
+
+            result = subprocess.run(
+                [HERMES_SCRIPTS / "start-kiosk.sh"],
+                env={
+                    **os.environ,
+                    "CAGE_BIN": str(cage),
+                    "BROWSER_BIN": "/snap/bin/chromium",
+                    "CURL_BIN": "/usr/bin/true",
+                    "OLYMPUS_DRM_ROOT": str(root / "drm"),
+                    "OLYMPUS_KIOSK_PROFILE": str(root / "profile"),
+                    "XDG_RUNTIME_DIR": str(root / "runtime"),
+                    "CAGE_ARGUMENTS": str(arguments),
+                },
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(arguments.read_text(encoding="utf-8").splitlines(), [
+                "-d",
+                "-s",
+                "--",
+                "/snap/bin/chromium",
+                "--ozone-platform=wayland",
+                "--kiosk",
+                "--no-first-run",
+                "--noerrdialogs",
+                "--disable-session-crashed-bubble",
+                "--disable-translate",
+                "--overscroll-history-navigation=0",
+                f"--user-data-dir={root / 'profile'}",
+                "http://127.0.0.1:8000/",
+            ])
 
     def test_kiosk_detects_monitor_and_bounds_core_wait_in_test_mode(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

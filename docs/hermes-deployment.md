@@ -318,12 +318,14 @@ The browser uses Chromium's documented `--ozone-platform=wayland` selection; see
 the [Chromium Ozone overview](https://chromium.googlesource.com/chromium/src/+/main/docs/ozone_overview.md).
 
 The launcher does **not** use `--no-sandbox`. Chromium runs as the ordinary
-`olympus-display` user with its sandbox available. Cage XWayland support is
-disabled at runtime (`-x`) because Chromium uses native Wayland. No GDM, SDDM,
-LightDM, GNOME, KDE, XFCE, X11 desktop session, or cursor-hiding daemon is
-installed. Production CSS hides the pointer and selection artifacts. Cage
-supports Wayland idle inhibition; Olympus does not globally disable CPU power
-saving or add DDC/CI, HDMI power, host suspend, or thermal shutdown behavior.
+`olympus-display` user with its sandbox available. The launcher uses the Cage
+0.2.1-compatible `cage -d -s -- chromium ...` form; it does not request the
+unsupported `-x` option. Chromium already uses native Wayland, so Olympus does
+not require an XWayland control flag. No GDM, SDDM, LightDM, GNOME, KDE, XFCE,
+X11 desktop session, or cursor-hiding daemon is installed. Production CSS hides
+the pointer and selection artifacts. Cage supports Wayland idle inhibition;
+Olympus does not globally disable CPU power saving or add DDC/CI, HDMI power,
+host suspend, or thermal shutdown behavior.
 
 If no monitor is attached, Core and all other Hermes services remain unaffected.
 The accepted WALL baseline runs the kiosk on the attached display; kiosk
