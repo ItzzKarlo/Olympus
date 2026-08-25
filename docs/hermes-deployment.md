@@ -1,23 +1,26 @@
 # Hermes production deployment
 
-This document installs Olympus v0.14 as one respectful workload on the existing
-Hermes host.
+This document installs Olympus v1.0 as one respectful workload on the existing
+Hermes host. v1.0 formalizes the successfully accepted physical WALL deployment
+as the production baseline; the earlier v0.14.1 deployment remains its immediate
+pre-baseline predecessor.
 
 > **Hermes is shared infrastructure.** The Olympus installer does not remove,
 > stop, replace, or reconfigure Pi-hole, Pterodactyl, Docker, SSH, Wake-on-LAN,
 > networking, firewall policy, or any other unrelated service. It never reboots,
 > shuts down, suspends, or thermally powers off the host.
 
-The target is Raspberry Pi 5, Ubuntu Server 26.04 (ARM64). Core can be deployed
-and accepted while Hermes is headless. Cage/Chromium boot, DRM, HDMI hotplug, and
-the final unattended visual path remain hardware acceptance steps until they are
-run on Hermes with the monitor attached.
+The target is Raspberry Pi 5, Ubuntu Server 26.04 (ARM64). Core, Cage/Chromium,
+DRM, HDMI hotplug, and the unattended visual path have been accepted on the real
+WALL hardware. The same release remains usable headlessly when no monitor is
+attached.
 
 ## Production shape
 
 ```text
-/opt/olympus/releases/0.14.0/  replaceable application release
+/opt/olympus/releases/1.0.0/   replaceable application release
 /opt/olympus/current           atomic symlink to the active release
+/opt/olympus/current/RELEASE-METADATA.json  immutable build provenance
 /etc/olympus/config.toml       non-secret production configuration
 /etc/olympus/secrets.env       integration credentials
 /etc/olympus/kiosk.env         optional kiosk overrides
@@ -74,21 +77,29 @@ scripts/hermes/build-release.sh --skip-node-install
 The result is:
 
 ```text
-dist/hermes/olympus-0.14.0-hermes-arm64.tar.gz
-dist/hermes/olympus-0.14.0-hermes-arm64.tar.gz.sha256
+dist/hermes/olympus-1.0.0-hermes-arm64.tar.gz
+dist/hermes/olympus-1.0.0-hermes-arm64.tar.gz.sha256
 ```
 
 Verify the checksum after transferring both files to Hermes, then extract:
 
 ```bash
-sha256sum -c olympus-0.14.0-hermes-arm64.tar.gz.sha256
-tar -xzf olympus-0.14.0-hermes-arm64.tar.gz
-cd olympus-0.14.0
+sha256sum -c olympus-1.0.0-hermes-arm64.tar.gz.sha256
+tar -xzf olympus-1.0.0-hermes-arm64.tar.gz
+cd olympus-1.0.0
 ```
 
 The archive contains portable Python source and static browser assets. The
 installer creates the Linux ARM64 virtual environment on Hermes; never copy a
 macOS or x86 virtual environment onto the Pi.
+
+`VERSION` is the product version source of truth. The build also writes a
+deterministic `RELEASE-METADATA.json` containing the version, exact 40-character
+Git revision, and whether the source tree was clean. Deployable builds require a
+clean tree. An explicit `--allow-dirty` is available only for local packaging
+experiments, and the installer rejects the resulting dirty artifact. Source
+archives without `.git` must provide `OLYMPUS_SOURCE_REVISION`; no timestamp,
+credential, host identity, or source diff is embedded.
 
 ## First installation: Core only
 
@@ -116,6 +127,10 @@ systemctl status olympus-core
 curl http://127.0.0.1:8000/health
 journalctl -u olympus-core -n 100 --no-pager
 ```
+
+The health response includes `version`, `revision`, and `source_tree`. The
+read-only doctor prints the same packaged version and revision from
+`RELEASE-METADATA.json`.
 
 Core uses one Uvicorn worker and never enables reload. It starts after ordinary
 `network.target`, not `network-online.target`, so router, DNS, or WAN absence
@@ -304,7 +319,8 @@ supports Wayland idle inhibition; Olympus does not globally disable CPU power
 saving or add DDC/CI, HDMI power, host suspend, or thermal shutdown behavior.
 
 If no monitor is attached, Core and all other Hermes services remain unaffected.
-The kiosk can safely remain disabled until WALL installation day.
+The accepted WALL baseline runs the kiosk on the attached display; kiosk
+enable/disable remains an independent operator choice for other installations.
 
 ## Diagnostics and logs
 
@@ -371,9 +387,11 @@ After installation, perform a read-only sanity check of Pi-hole, Pterodactyl,
 Docker, and SSH using their existing operator procedures. Do not automate
 invasive restarts as an “acceptance test.”
 
-## Hermes hardware acceptance checklist
+## WALL production acceptance record
 
-These items must be performed on the real ARM64 host before claiming WALL:
+The physical ARM64 WALL deployment completed hardware acceptance before Olympus
+v1.0 was designated the production baseline. The retained acceptance coverage
+was:
 
 1. Install Core with kiosk disabled; verify health and production Display over a
    local browser.
@@ -391,7 +409,6 @@ These items must be performed on the real ARM64 host before claiming WALL:
 11. Confirm Pi-hole, Pterodactyl, Docker, WOL, and SSH remain operational during
     ordinary Olympus restart/update activity.
 
-Until those physical checks are complete, package availability, source release,
-unit structure, static serving, backup behavior, watchdog behavior, and launcher
-construction are verified—but real Cage boot, Chromium ARM64 rendering, HDMI,
-and unattended reboot acceptance are explicitly pending.
+WALL hardware acceptance is complete. Future releases should repeat the relevant
+checks when changing startup, kiosk, display, backup, watchdog, or host-integration
+behavior; the v1.0 metadata-only baseline change does not alter those behaviors.

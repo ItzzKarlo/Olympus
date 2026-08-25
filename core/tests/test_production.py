@@ -1,5 +1,7 @@
+import asyncio
 from datetime import datetime, timezone
 from contextlib import closing
+import json
 import os
 from pathlib import Path
 import sqlite3
@@ -14,6 +16,40 @@ from olympus_core.display.static import install_display_routes
 from olympus_core.healthcheck import HealthWatchdog, main as healthcheck_main
 from olympus_core.persistence.backup import create_backup, prune_backups
 from olympus_core.persistence.database import Database
+from olympus_core.main import app, health
+from olympus_core.release import release_info
+
+
+class ReleaseInfoTests(unittest.TestCase):
+    def test_core_reports_v1_and_reads_packaged_revision(self) -> None:
+        self.assertEqual(app.version, "1.0.0")
+        self.assertEqual(asyncio.run(health())["version"], "1.0.0")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "VERSION").write_text("1.0.0\n", encoding="ascii")
+            (root / "RELEASE-METADATA.json").write_text(json.dumps({
+                "revision": "b" * 40,
+                "source_tree": "clean",
+                "version": "1.0.0",
+            }), encoding="ascii")
+            release = release_info(root)
+        self.assertEqual(release.version, "1.0.0")
+        self.assertEqual(release.revision, "b" * 40)
+        self.assertEqual(release.source_tree, "clean")
+
+    def test_invalid_or_mismatched_metadata_never_claims_a_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "VERSION").write_text("1.0.0\n", encoding="ascii")
+            (root / "RELEASE-METADATA.json").write_text(json.dumps({
+                "revision": "short",
+                "source_tree": "clean",
+                "version": "0.14.1",
+            }), encoding="ascii")
+            release = release_info(root)
+        self.assertEqual(release.version, "1.0.0")
+        self.assertEqual(release.revision, "unknown")
+        self.assertEqual(release.source_tree, "development")
 
 
 class ProductionDisplayTests(unittest.TestCase):

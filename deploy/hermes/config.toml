@@ -1,4 +1,4 @@
-# Olympus v0.14 production template for Hermes. Contains no credentials.
+# Olympus v1.0 production template for Hermes. Contains no credentials.
 core_host_poll_seconds = 5
 
 [olympus]

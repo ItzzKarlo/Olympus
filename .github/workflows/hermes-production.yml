@@ -9,6 +9,7 @@ on:
       - "deploy/hermes/**"
       - "docs/hermes-deployment.md"
       - "scripts/hermes/**"
+      - "VERSION"
       - ".github/workflows/hermes-production.yml"
 
 jobs:
@@ -41,6 +42,13 @@ jobs:
         run: for script in scripts/hermes/*.sh; do sh -n "$script"; done
       - name: Build transferable Hermes release
         run: scripts/hermes/build-release.sh --skip-node-install
+      - name: Verify release provenance
+        run: |
+          version=$(tr -d '[:space:]' < VERSION)
+          metadata=$(tar -xOf "dist/hermes/olympus-$version-hermes-arm64.tar.gz" "olympus-$version/RELEASE-METADATA.json")
+          echo "$metadata" | grep -F "\"version\": \"$version\""
+          echo "$metadata" | grep -F "\"revision\": \"$GITHUB_SHA\""
+          echo "$metadata" | grep -F '"source_tree": "clean"'
       - name: Reject development or private state in release
         run: |
           if tar -tzf dist/hermes/olympus-*-hermes-arm64.tar.gz | grep -E '(^|/)(\.venv|node_modules|\.env|[^/]*\.(db|pyc))(/|$)'; then

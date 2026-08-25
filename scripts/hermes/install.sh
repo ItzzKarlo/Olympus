@@ -40,10 +40,18 @@ VERSION=$(tr -d '[:space:]' < "$RELEASE_DIR/VERSION")
 case "$VERSION" in
     ''|*[!0-9A-Za-z.-]*) echo "Invalid release version." >&2; exit 1 ;;
 esac
+command -v python3 >/dev/null 2>&1 || { echo "python3 is required." >&2; exit 1; }
+METADATA=$RELEASE_DIR/RELEASE-METADATA.json
+METADATA_JSON=$(python3 "$RELEASE_DIR/scripts/hermes/release_metadata.py" validate \
+    --metadata "$METADATA" \
+    --version-file "$RELEASE_DIR/VERSION" \
+    --require-clean)
+REVISION=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["revision"])' "$METADATA_JSON")
 
 if [ "$DRY_RUN" -eq 1 ]; then
     echo "Olympus Hermes deployment plan"
     echo "Release: $RELEASE_DIR ($VERSION)"
+    echo "Revision: $REVISION"
     echo "Target:  /opt/olympus/releases/$VERSION"
     echo "State:   /var/lib/olympus (preserved)"
     echo "Config:  /etc/olympus (preserved)"
@@ -69,7 +77,6 @@ if [ "$INSTALL_KIOSK_PACKAGES" -eq 1 ]; then
     apt-get install --no-install-recommends cage chromium-browser fonts-noto-core fonts-noto-color-emoji libpam-systemd
 fi
 
-command -v python3 >/dev/null 2>&1 || { echo "python3 is required." >&2; exit 1; }
 command -v curl >/dev/null 2>&1 || { echo "curl is required." >&2; exit 1; }
 if [ "$ENABLE_KIOSK" -eq 1 ]; then
     command -v cage >/dev/null 2>&1 || { echo "Cage is required before enabling kiosk." >&2; exit 1; }

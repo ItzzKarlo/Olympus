@@ -20,9 +20,17 @@ check_file() {
 check_file "production config" /etc/olympus/config.toml
 check_file "Core database" /var/lib/olympus/core.db
 check_file "Display entrypoint" /opt/olympus/current/display/index.html
+check_file "release metadata" /opt/olympus/current/RELEASE-METADATA.json
 check_file "Core unit" /etc/systemd/system/olympus-core.service
 check_file "backup timer" /etc/systemd/system/olympus-backup.timer
 check_file "health timer" /etc/systemd/system/olympus-healthcheck.timer
+
+if [ -r "$ROOT/opt/olympus/current/RELEASE-METADATA.json" ]; then
+    sed -n \
+        -e 's/^  "version": "\([^"]*\)",\{0,1\}$/INFO  release version: \1/p' \
+        -e 's/^  "revision": "\([0-9a-f]*\)",\{0,1\}$/INFO  release revision: \1/p' \
+        "$ROOT/opt/olympus/current/RELEASE-METADATA.json"
+fi
 
 if [ -r "$ROOT/var/lib/olympus/core.db" ]; then
     echo "PASS  Core database readable"

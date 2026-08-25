@@ -227,17 +227,46 @@ class StubProvider:
 
 
 class PresentationTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self.now = datetime.now(timezone.utc)
+
+    def current_article(
+        self,
+        source: NewsFeedSettings,
+        headline: str,
+        **overrides,
+    ) -> NewsArticle:
+        return article(
+            source,
+            headline,
+            published_at=self.now,
+            observed_at=self.now,
+            **overrides,
+        )
+
+    def current_result(
+        self,
+        feed: NewsFeedSettings,
+        *articles: NewsArticle,
+    ) -> NewsFeedResult:
+        return result(feed, *articles, at=self.now)
+
     async def test_startup_suppression_then_edge_trigger_and_exact_expiry(self) -> None:
         settings = replace(SETTINGS, presentation=replace(
             SETTINGS.presentation, news_scene_seconds=0.05, major_scene_seconds=0.05,
         ))
-        baseline = article(FEEDS[0], "Existing breaking emergency story", identifier="old")
+        baseline = self.current_article(
+            FEEDS[0], "Existing breaking emergency story", identifier="old"
+        )
         headline = "International leaders confirm broad emergency response plan"
-        additions = [article(feed, headline, identifier=feed.id, topic=NewsTopic.WORLD) for feed in FEEDS]
+        additions = [
+            self.current_article(feed, headline, identifier=feed.id, topic=NewsTopic.WORLD)
+            for feed in FEEDS
+        ]
         provider = StubProvider([
-            [result(FEEDS[0], baseline)],
-            [result(feed, item) for feed, item in zip(FEEDS, additions)],
-            [NewsFeedResult(feed=feed, observed_at=NOW, not_modified=True) for feed in FEEDS],
+            [self.current_result(FEEDS[0], baseline)],
+            [self.current_result(feed, item) for feed, item in zip(FEEDS, additions)],
+            [NewsFeedResult(feed=feed, observed_at=self.now, not_modified=True) for feed in FEEDS],
         ])
         states, events = [], []
         collector = NewsCollector(settings, provider, states.append, events.append)
@@ -263,13 +292,13 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
             major_scene_seconds=30,
         ))
         title = "Emergency rail network disruption affects southern Germany today"
-        one = article(FEEDS[0], title, identifier="one", topic=NewsTopic.TRANSPORT)
-        two = article(FEEDS[1], title, identifier="two", topic=NewsTopic.TRANSPORT)
-        three = article(FEEDS[2], title, identifier="three", topic=NewsTopic.TRANSPORT)
+        one = self.current_article(FEEDS[0], title, identifier="one", topic=NewsTopic.TRANSPORT)
+        two = self.current_article(FEEDS[1], title, identifier="two", topic=NewsTopic.TRANSPORT)
+        three = self.current_article(FEEDS[2], title, identifier="three", topic=NewsTopic.TRANSPORT)
         provider = StubProvider([
-            [result(FEEDS[0], one)],
-            [result(FEEDS[1], two)],
-            [result(FEEDS[2], three)],
+            [self.current_result(FEEDS[0], one)],
+            [self.current_result(FEEDS[1], two)],
+            [self.current_result(FEEDS[2], three)],
         ])
         events = []
         collector = NewsCollector(settings, provider, lambda state: None, events.append)
@@ -289,11 +318,13 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
             news_scene_seconds=30,
             major_scene_seconds=30,
         ))
-        baseline = article(FEEDS[0], "Routine standards meeting concludes", identifier="baseline")
+        baseline = self.current_article(
+            FEEDS[0], "Routine standards meeting concludes", identifier="baseline"
+        )
         title = "Emergency rail network disruption affects southern Germany today"
-        one = article(FEEDS[0], title, identifier="one", topic=NewsTopic.TRANSPORT)
-        two = article(FEEDS[1], title, identifier="two", topic=NewsTopic.TRANSPORT)
-        three = article(FEEDS[2], title, identifier="three", topic=NewsTopic.TRANSPORT)
+        one = self.current_article(FEEDS[0], title, identifier="one", topic=NewsTopic.TRANSPORT)
+        two = self.current_article(FEEDS[1], title, identifier="two", topic=NewsTopic.TRANSPORT)
+        three = self.current_article(FEEDS[2], title, identifier="three", topic=NewsTopic.TRANSPORT)
         with tempfile.TemporaryDirectory() as directory:
             database = Database(Path(directory) / "core.db")
             database.initialize()
@@ -301,8 +332,8 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
             first = NewsCollector(
                 settings,
                 StubProvider([
-                    [result(FEEDS[0], baseline)],
-                    [result(FEEDS[0], one), result(FEEDS[1], two)],
+                    [self.current_result(FEEDS[0], baseline)],
+                    [self.current_result(FEEDS[0], one), self.current_result(FEEDS[1], two)],
                 ]),
                 lambda state: None,
                 lambda event: None,
@@ -316,9 +347,9 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
             restarted = NewsCollector(
                 settings,
                 StubProvider([
-                    [result(FEEDS[0], baseline)],
-                    [result(FEEDS[0], one), result(FEEDS[1], two)],
-                    [result(FEEDS[2], three)],
+                    [self.current_result(FEEDS[0], baseline)],
+                    [self.current_result(FEEDS[0], one), self.current_result(FEEDS[1], two)],
+                    [self.current_result(FEEDS[2], three)],
                 ]),
                 lambda state: None,
                 lambda event: None,

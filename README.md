@@ -2,6 +2,10 @@
 
 Olympus is a local, event-driven home display and automation system.
 
+**Olympus v1.0 is the accepted production baseline.** The complete system is
+physically deployed on the WALL display and runs from Hermes. Earlier v0.1–v0.14
+milestones remain part of the project history documented below.
+
 It runs primarily on a Raspberry Pi and combines data from devices, local services,
 external APIs, and machine agents into one context-aware display.
 
@@ -96,7 +100,7 @@ machine Agent:
 Minecraft + Fabric observer → localhost Agent → Core → Display
 ```
 
-Olympus v0.14 implements this full local path. Agents own device-specific
+The Olympus v1.0 production baseline implements this full local path. Agents own device-specific
 observation, Core owns interpretation and monitoring, and the Display consumes
 only Core's normalized state.
 
@@ -1136,9 +1140,10 @@ When the Display is not running on Hermes itself, configure the Core endpoint:
 VITE_OLYMPUS_CORE_WS=ws://10.10.0.10:8000/ws/display npm run dev
 ```
 
-For v0.14, the same Display remains available through Vite during development and
-is compiled into static assets served directly by Core in production. Hermes can
-launch those assets through the optional minimal Cage/Chromium kiosk.
+For v1.0, the same Display remains available through Vite during development and
+is compiled into static assets served directly by Core in production. The
+accepted WALL deployment launches those assets through the minimal
+Cage/Chromium kiosk on Hermes.
 
 ## Test
 
@@ -1168,8 +1173,14 @@ cd integrations/minecraft-fabric
 gradle build
 ```
 
-The current milestone adds Hermes production release tooling and an optional
-minimal kiosk without packaging Core as a native binary or adding Docker, a full
+The root `VERSION` file is the product release source of truth. A deployable
+Hermes build requires a clean Git tree and includes `RELEASE-METADATA.json` with
+the version and exact full source revision. For local packaging experiments only,
+`--allow-dirty` creates a clearly marked development artifact; the Hermes
+installer rejects such an artifact.
+
+The v1.0 baseline includes Hermes production release tooling and a minimal kiosk
+without packaging Core as a native binary or adding Docker, a full
 desktop, automatic online updates, application control, audio/RGB output,
 physical display power control, or a Web administration surface. FPS remains an
 optional external Windows input, and unavailable metrics are omitted. macOS and

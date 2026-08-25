@@ -16,6 +16,7 @@ from olympus_core.integrations.football import FootballCollector, create_footbal
 from olympus_core.integrations.news import FixtureNewsProvider, NewsCollector, RssNewsProvider
 from olympus_core.monitoring.config import load_monitoring_config
 from olympus_core.monitoring.runtime import MonitoringRuntime
+from olympus_core.release import release_info
 from olympus_core.models.agent import RegisteredAgent
 from olympus_core.models.media import MediaState
 from olympus_core.models.gameplay import GameplayEvent
@@ -315,20 +316,26 @@ async def lifespan(_app: FastAPI):
         database.close()
 
 
+RELEASE = release_info()
+
+
 app = FastAPI(
     title="Olympus Core",
     description="Core service for the Olympus home display system.",
-    version="0.14.0",
+    version=RELEASE.version,
     lifespan=lifespan,
 )
 
 
 @app.get("/health")
 async def health() -> dict[str, str]:
+    release = release_info()
     return {
         "status": "ok",
         "service": "olympus-core",
-        "version": "0.14.0",
+        "version": release.version,
+        "revision": release.revision,
+        "source_tree": release.source_tree,
         "persistence": "healthy" if database.available else "unavailable",
     }
 
