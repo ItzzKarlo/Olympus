@@ -218,9 +218,14 @@ Create enrollment tokens locally on Hermes and use the packaged desktop Agent
 workflow from the main README:
 
 ```bash
-sudo -u olympus env OLYMPUS_CONFIG=/etc/olympus/config.toml \
-  /opt/olympus/current/core/.venv/bin/python -m olympus_core.admin enrollment create
+sudo -u olympus /opt/olympus/current/scripts/hermes/admin.sh enrollment create
 ```
+
+Use the same wrapper for other production administration, for example
+`sudo -u olympus /opt/olympus/current/scripts/hermes/admin.sh devices list`.
+The wrapper selects the active release's Core source, production virtual
+environment, and `/etc/olympus/config.toml` independently of the caller's current
+working directory.
 
 The production database normally starts clean. Do not silently import a
 development Mac database. Existing enrolled devices reconnect after Core
@@ -231,6 +236,8 @@ restarts because `/var/lib/olympus/core.db` is outside release directories.
 `olympus-backup.timer` runs daily with a randomized delay and retains fourteen
 days by default. It uses SQLite's online backup API and validates
 `PRAGMA integrity_check`; it never copies a live WAL database with plain `cp`.
+The installer and backup unit invoke the same production admin wrapper, so the
+mandatory pre-update backup does not depend on the invoking shell's directory.
 
 Run and inspect a backup:
 

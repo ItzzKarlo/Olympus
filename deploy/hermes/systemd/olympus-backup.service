@@ -9,7 +9,7 @@ Group=olympus
 WorkingDirectory=/opt/olympus/current/core
 Environment=OLYMPUS_CONFIG=/etc/olympus/config.toml
 EnvironmentFile=-/etc/olympus/secrets.env
-ExecStart=/opt/olympus/current/core/.venv/bin/python -m olympus_core.admin backup
+ExecStart=/opt/olympus/current/scripts/hermes/admin.sh backup
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true

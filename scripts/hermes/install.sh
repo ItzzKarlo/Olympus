@@ -123,7 +123,8 @@ fi
 if [ -f /var/lib/olympus/core.db ] && [ -x /opt/olympus/current/core/.venv/bin/python ]; then
     echo "Creating pre-update SQLite backup."
     OLYMPUS_CONFIG=/etc/olympus/config.toml \
-        /opt/olympus/current/core/.venv/bin/python -m olympus_core.admin backup
+        "$RELEASE_DIR/scripts/hermes/admin.sh" \
+        --core-dir /opt/olympus/current/core backup
 fi
 
 AVAILABLE_KB=$(df -Pk /opt | awk 'NR == 2 {print $4}')

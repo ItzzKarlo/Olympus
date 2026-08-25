@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -16,6 +17,83 @@ REVISION = "a" * 40
 
 
 class HermesScriptTests(unittest.TestCase):
+    def production_core_fixture(self, root: Path) -> Path:
+        core = root / "active" / "core"
+        shutil.copytree(ROOT / "core" / "olympus_core", core / "olympus_core")
+        python = core / ".venv" / "bin" / "python"
+        python.parent.mkdir(parents=True)
+        python.symlink_to(sys.executable)
+        return core
+
+    def production_config(self, root: Path) -> tuple[Path, Path, Path]:
+        database = root / "state" / "core.db"
+        backups = root / "backups"
+        config = root / "config.toml"
+        config.write_text(
+            "\n".join((
+                "[persistence]",
+                f'database_path = "{database}"',
+                "[backup]",
+                f'directory = "{backups}"',
+                "retention_days = 14",
+                "",
+            )),
+            encoding="utf-8",
+        )
+        return config, database, backups
+
+    def installer_fixture(
+        self,
+        root: Path,
+        core: Path,
+        database: Path,
+        config: Path,
+    ) -> tuple[Path, dict[str, str], Path]:
+        release = root / "release"
+        scripts = release / "scripts" / "hermes"
+        scripts.mkdir(parents=True)
+        shutil.copy(HERMES_SCRIPTS / "admin.sh", scripts / "admin.sh")
+        shutil.copy(HERMES_SCRIPTS / "release_metadata.py", scripts / "release_metadata.py")
+        installer = (HERMES_SCRIPTS / "install.sh").read_text(encoding="utf-8")
+        installer = installer.replace("/opt/olympus/current/core", str(core))
+        installer = installer.replace("/var/lib/olympus/core.db", str(database))
+        installer = installer.replace("/etc/olympus/config.toml", str(config))
+        install_path = scripts / "install.sh"
+        install_path.write_text(installer, encoding="utf-8")
+        install_path.chmod(0o755)
+        (scripts / "admin.sh").chmod(0o755)
+        (release / "VERSION").write_text("1.0.0\n", encoding="ascii")
+        (release / "RELEASE-METADATA.json").write_text(json.dumps({
+            "revision": REVISION,
+            "source_tree": "clean",
+            "version": "1.0.0",
+        }), encoding="ascii")
+
+        fake_bin = root / "fake-bin"
+        fake_bin.mkdir()
+        commands = {
+            "id": "#!/bin/sh\nif [ \"${1:-}\" = -u ]; then echo 0; fi\nexit 0\n",
+            "install": "#!/bin/sh\nexit 0\n",
+            "getent": "#!/bin/sh\nexit 1\n",
+            "df": (
+                "#!/bin/sh\n"
+                "/usr/bin/touch \"$TEST_DF_MARKER\"\n"
+                "echo 'Filesystem 1024-blocks Used Available Capacity Mounted on'\n"
+                "echo 'test 2 1 1 50% /opt'\n"
+            ),
+        }
+        for name, source in commands.items():
+            command = fake_bin / name
+            command.write_text(source, encoding="ascii")
+            command.chmod(0o755)
+        marker = root / "df-reached"
+        environment = {
+            **os.environ,
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+            "TEST_DF_MARKER": str(marker),
+        }
+        return install_path, environment, marker
+
     def test_product_and_component_version_declarations_are_synchronized(self) -> None:
         version = (ROOT / "VERSION").read_text(encoding="ascii").strip()
         self.assertEqual(version, "1.0.0")
@@ -131,6 +209,112 @@ class HermesScriptTests(unittest.TestCase):
             self.assertIn(f"Revision: {REVISION}", result.stdout)
             self.assertIn("Kiosk enable requested: 1", result.stdout)
             self.assertEqual(before, sorted(release.iterdir()))
+
+    def test_installer_runs_pre_update_backup_outside_core_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            core = self.production_core_fixture(root)
+            config, database, backups = self.production_config(root)
+            database.parent.mkdir(parents=True)
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE proof (value TEXT NOT NULL)")
+                connection.execute("INSERT INTO proof VALUES ('installer')")
+            installer, environment, marker = self.installer_fixture(
+                root, core, database, config
+            )
+            caller = root / "unrelated-caller-directory"
+            caller.mkdir()
+
+            result = subprocess.run(
+                [installer],
+                cwd=caller,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Creating pre-update SQLite backup", result.stdout)
+            self.assertIn("Created safe SQLite backup", result.stdout)
+            self.assertIn("Insufficient free space", result.stderr)
+            self.assertTrue(marker.exists())
+            created = list(backups.glob("core-*.db"))
+            self.assertEqual(len(created), 1)
+            with sqlite3.connect(created[0]) as connection:
+                self.assertEqual(
+                    connection.execute("SELECT value FROM proof").fetchone()[0],
+                    "installer",
+                )
+
+    def test_admin_wrapper_runs_enrollment_and_devices_outside_core_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            core = self.production_core_fixture(root)
+            config, database, _backups = self.production_config(root)
+            caller = root / "unrelated-caller-directory"
+            caller.mkdir()
+            environment = {
+                **os.environ,
+                "OLYMPUS_CONFIG": str(config),
+            }
+
+            enrollment = subprocess.run(
+                [
+                    HERMES_SCRIPTS / "admin.sh", "--core-dir", core,
+                    "enrollment", "create", "--label", "test",
+                ],
+                cwd=caller,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            devices = subprocess.run(
+                [HERMES_SCRIPTS / "admin.sh", "--core-dir", core, "devices", "list"],
+                cwd=caller,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            self.assertTrue(database.exists())
+            self.assertIn("Olympus enrollment token", enrollment.stdout)
+            self.assertIn("No trusted devices", devices.stdout)
+
+    def test_installer_aborts_when_pre_update_admin_backup_fails(self) -> None:
+        installer = (HERMES_SCRIPTS / "install.sh").read_text(encoding="utf-8")
+        self.assertTrue(installer.startswith("#!/bin/sh\nset -eu\n"))
+        self.assertIn('"$RELEASE_DIR/scripts/hermes/admin.sh"', installer)
+        self.assertIn("--core-dir /opt/olympus/current/core backup", installer)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            core = root / "active" / "core"
+            (core / "olympus_core").mkdir(parents=True)
+            python = core / ".venv" / "bin" / "python"
+            python.parent.mkdir(parents=True)
+            python.write_text("#!/bin/sh\nexit 23\n", encoding="ascii")
+            python.chmod(0o755)
+            config, database, _backups = self.production_config(root)
+            database.parent.mkdir(parents=True)
+            database.write_bytes(b"database-present")
+            install_path, environment, marker = self.installer_fixture(
+                root, core, database, config
+            )
+            caller = root / "unrelated-caller-directory"
+            caller.mkdir()
+            result = subprocess.run(
+                [install_path],
+                cwd=caller,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 23)
+            self.assertIn("Creating pre-update SQLite backup", result.stdout)
+            self.assertFalse(marker.exists())
 
     def test_doctor_rooted_mode_is_observational(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -254,6 +438,13 @@ class SystemdTemplateTests(unittest.TestCase):
         self.assertNotIn("network-online.target", unit)
         self.assertNotIn("--reload", unit)
         self.assertNotIn("workers 2", unit)
+
+    def test_scheduled_backup_uses_cwd_independent_admin_wrapper(self) -> None:
+        unit = (UNITS / "olympus-backup.service").read_text(encoding="utf-8")
+        self.assertIn(
+            "ExecStart=/opt/olympus/current/scripts/hermes/admin.sh backup",
+            unit,
+        )
 
     def test_watchdog_can_only_target_olympus_core(self) -> None:
         unit = (UNITS / "olympus-healthcheck.service").read_text(encoding="utf-8")
