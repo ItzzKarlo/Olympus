@@ -1,17 +1,18 @@
 # Hermes production deployment
 
-This document installs Olympus 1.0.2 as one respectful workload on the existing
+This document installs Olympus 1.0.3 as one respectful workload on the existing
 Hermes host. WALL originally launched and was accepted as 1.0.0; 1.0.1 was the
-deployed post-WALL stabilization patch, and 1.0.2 fixes stale Chromium profile
-ownership markers during kiosk restart. The earlier v0.14.1 deployment remains
-the immediate pre-baseline predecessor.
+deployed post-WALL stabilization and observability patch; 1.0.2 added defensive
+browser-profile lifecycle handling; and 1.0.3 freezes the hardware-proven native
+Brave kiosk runtime. The earlier v0.14.1 deployment remains the immediate
+pre-baseline predecessor.
 
 > **Hermes is shared infrastructure.** The Olympus installer does not remove,
 > stop, replace, or reconfigure Pi-hole, Pterodactyl, Docker, SSH, Wake-on-LAN,
 > networking, firewall policy, or any other unrelated service. It never reboots,
 > shuts down, suspends, or thermally powers off the host.
 
-The target is Raspberry Pi 5, Ubuntu Server 26.04 (ARM64). Core, Cage/Chromium,
+The target is Raspberry Pi 5, Ubuntu Server 26.04 (ARM64). Core, Cage/Brave,
 DRM, HDMI hotplug, and the unattended visual path have been accepted on the real
 WALL hardware. The same release remains usable headlessly when no monitor is
 attached.
@@ -19,7 +20,7 @@ attached.
 ## Production shape
 
 ```text
-/opt/olympus/releases/1.0.2/   immutable application release
+/opt/olympus/releases/1.0.3/   immutable application release
 /opt/olympus/current           atomic symlink to the active release
 /opt/olympus/current/RELEASE-METADATA.json  immutable build provenance
 /etc/olympus/config.toml       non-secret production configuration
@@ -27,11 +28,11 @@ attached.
 /etc/olympus/kiosk.env         optional kiosk overrides
 /var/lib/olympus/core.db       durable SQLite state and device trust
 /var/backups/olympus/          safe, retained SQLite backups
-/home/olympus-display/         isolated Chromium profile
+/home/olympus-display/         isolated Brave profile
 ```
 
-Core runs as the locked, low-privilege `olympus` system account. Cage and
-Chromium run as the separate, password-locked `olympus-display` account. Neither
+Core runs as the locked, low-privilege `olympus` system account. Cage and native
+Brave run as the separate, password-locked `olympus-display` account. Neither
 process runs as root. Application releases contain no database, credentials,
 virtual environment, Node modules, Python caches, or developer environment file.
 
@@ -45,20 +46,24 @@ configurable LAN address for trusted Agents.
 Package names were checked against the Ubuntu 26.04 “Resolute” ARM64 archive:
 
 - Core: `python3`, `python3-venv`, `python3-pip`, `curl`, `ca-certificates`
-- Kiosk: `cage`, `chromium-browser`, `fonts-noto-core`,
+- Kiosk: `cage`, `brave-browser`, `fonts-noto-core`,
   `fonts-noto-color-emoji`, `libpam-systemd`
 
-Ubuntu provides Cage 0.2.1 for ARM64 in `universe`. Its `chromium-browser`
-package is a transition to the confined Chromium snap rather than a traditional
-browser `.deb`. The kiosk launcher therefore discovers both
-`/snap/bin/chromium` and distribution wrapper names. Package availability is
-documented by the [Ubuntu Cage package](https://packages.ubuntu.com/resolute/cage)
-and [Ubuntu Chromium transition package](https://packages.ubuntu.com/resolute/arm64/chromium-browser).
+Ubuntu provides Cage 0.2.1 for ARM64 in `universe`. Brave's official release
+repository supports native ARM64 and supplies `brave-browser`; Olympus does not
+install the Ubuntu `chromium-browser` Snap transition package. The installer
+downloads Brave's signing key and deb822 `.sources` file to temporary files,
+installs them only when their content changes, refreshes apt metadata, installs
+the native package, and verifies `/usr/bin/brave-browser`. It never pipes a
+network response into a shell. See [Brave's official Linux installation
+instructions](https://brave.com/linux/) and the [Ubuntu Cage
+package](https://packages.ubuntu.com/resolute/cage).
 
 The installer changes apt state only when an explicit package flag is supplied.
-It never runs `apt autoremove`, enables new repositories, or removes packages.
-If `universe` is not already enabled, enable it deliberately before requesting
-the kiosk packages.
+`--install-kiosk-packages` idempotently configures only Brave's official release
+repository. The installer never runs `apt upgrade` or `apt autoremove`, and it
+never removes packages. If `universe` is not already enabled, enable it
+deliberately before requesting the kiosk packages.
 
 ## Build a transferable release
 
@@ -78,16 +83,16 @@ scripts/hermes/build-release.sh --skip-node-install
 The result is:
 
 ```text
-dist/hermes/olympus-1.0.2-hermes-arm64.tar.gz
-dist/hermes/olympus-1.0.2-hermes-arm64.tar.gz.sha256
+dist/hermes/olympus-1.0.3-hermes-arm64.tar.gz
+dist/hermes/olympus-1.0.3-hermes-arm64.tar.gz.sha256
 ```
 
 Verify the checksum after transferring both files to Hermes, then extract:
 
 ```bash
-sha256sum -c olympus-1.0.2-hermes-arm64.tar.gz.sha256
-tar -xzf olympus-1.0.2-hermes-arm64.tar.gz
-cd olympus-1.0.2
+sha256sum -c olympus-1.0.3-hermes-arm64.tar.gz.sha256
+tar -xzf olympus-1.0.3-hermes-arm64.tar.gz
+cd olympus-1.0.3
 ```
 
 The archive contains portable Python source and static browser assets. The
@@ -297,6 +302,22 @@ Install only the declared kiosk packages:
 sudo ./scripts/hermes/install.sh --install-kiosk-packages --enable-kiosk
 ```
 
+The packaged defaults are:
+
+```dotenv
+BROWSER_BIN=/usr/bin/brave-browser
+OLYMPUS_KIOSK_PROFILE=/home/olympus-display/.config/olympus-brave
+```
+
+`BROWSER_BIN` remains configurable in `/etc/olympus/kiosk.env`. Enabling is not
+the same as restarting: `--enable-kiosk` enables the unit and starts it only when
+it is not already active. To intentionally replace a running physical kiosk
+process, request that action explicitly:
+
+```bash
+sudo ./scripts/hermes/install.sh --restart-kiosk
+```
+
 Or control it independently later:
 
 ```bash
@@ -310,28 +331,35 @@ The launcher:
 1. waits without a restart loop until a DRM connector reports `connected`;
 2. waits for local Core health;
 3. starts Cage on tty1;
-4. starts Chromium in kiosk mode with a dedicated profile and native Wayland;
-5. lets systemd restart only the kiosk when Chromium/Cage exits.
+4. starts native Brave in kiosk mode with a dedicated profile and native Wayland;
+5. lets systemd restart only the kiosk when Brave/Cage exits.
 
 Immediately before launching Cage, the launcher checks live process command
 lines for the exact configured kiosk `--user-data-dir`. If that profile is active,
 startup fails without modifying it. Otherwise the launcher removes only stale
 `SingletonLock`, `SingletonCookie`, and `SingletonSocket` entries left by an
-earlier Chromium process; history, preferences, cookies, cache, and all other
+earlier browser process; history, preferences, cookies, cache, and all other
 profile data remain untouched.
 
 Cage supports output hotplug and exits after its final output is removed, so the
 service restart returns to the monitor-wait loop rather than rebooting Hermes.
 The packaged unit uses a ten-second restart delay and limits starts to six in
-five minutes. This recovers ordinary Cage/Chromium exits while preventing a
+five minutes. This recovers ordinary Cage/Brave exits while preventing a
 persistent configuration error from creating a tight restart storm.
+After a rate-limit hit, an operator deliberately clears and starts the unit with:
+
+```bash
+sudo systemctl reset-failed olympus-kiosk.service
+sudo systemctl start olympus-kiosk.service
+```
+
 The browser uses Chromium's documented `--ozone-platform=wayland` selection; see
 the [Chromium Ozone overview](https://chromium.googlesource.com/chromium/src/+/main/docs/ozone_overview.md).
 
-The launcher does **not** use `--no-sandbox`. Chromium runs as the ordinary
+The launcher does **not** use `--no-sandbox`. Brave runs as the ordinary
 `olympus-display` user with its sandbox available. The launcher uses the Cage
-0.2.1-compatible `cage -d -s -- chromium ...` form; it does not request the
-unsupported `-x` option. Chromium already uses native Wayland, so Olympus does
+0.2.1-compatible `cage -d -s -- /usr/bin/brave-browser ...` form; it does not
+request the unsupported `-x` option. Brave already uses native Wayland, so Olympus does
 not require an XWayland control flag. No GDM, SDDM, LightDM, GNOME, KDE, XFCE,
 X11 desktop session, or cursor-hiding daemon is installed. Production CSS hides
 the pointer and selection artifacts. Cage supports Wayland idle inhibition;
@@ -342,13 +370,31 @@ If no monitor is attached, Core and all other Hermes services remain unaffected.
 The accepted WALL baseline runs the kiosk on the attached display; kiosk
 enable/disable remains an independent operator choice for other installations.
 
-The packaged unit is authoritative. During 1.0.1 deployment acceptance, inspect
-`/etc/systemd/system/olympus-kiosk.service.d/` and remove obsolete local overrides
-that set `Restart=no`; otherwise systemd will continue to override the packaged
-recovery policy. After the packaged Cage 0.2.1 launcher is verified, also remove
-the temporary `99-cage-hotfix.conf` drop-in and
-`/usr/local/libexec/olympus-start-kiosk-hotfix.sh`, then run `systemctl
-daemon-reload` and restart only `olympus-kiosk.service`.
+The packaged unit is authoritative and includes journald output plus a private,
+mode-0700 `/run/olympus-kiosk` runtime directory owned for the service account.
+After 1.0.3 production acceptance, `98-debug-output.conf` is redundant and may
+be removed. Inspect `wall.conf` with `systemctl cat olympus-kiosk.service`; remove
+it only if its effective settings are limited to the runtime-directory behavior
+now present in the packaged unit. Never discard an administrator override whose
+remaining settings have not been audited. The old Cage hotfix and its drop-in
+remain retired.
+
+### Migration from the accepted 1.0.2 WALL
+
+The live WALL already has native Brave and the two values above in
+`/etc/olympus/kiosk.env`. Leave that preserved configuration in place. Deploy
+1.0.3 normally, without `--enable-kiosk` or `--restart-kiosk`; the installer
+backs up the database, stages and switches the release, restarts Core, and leaves
+the healthy Cage/Brave process alone. Confirm the Display reconnects to Core.
+
+At a separately chosen maintenance moment, compare the packaged unit and local
+drop-ins with `systemctl cat olympus-kiosk.service`. Remove the redundant
+`98-debug-output.conf`; remove `wall.conf` only after confirming it contains no
+behavior beyond the packaged runtime-directory settings. Then run `systemctl
+daemon-reload` and use `--restart-kiosk` once to accept the clean packaged unit.
+Do not remove the existing Brave profile or its data. The singleton cleanup is
+defensive lifecycle hardening and was not the cause or solution of the rejected
+Snap cgroup failure.
 
 ## Diagnostics and logs
 
@@ -388,6 +434,11 @@ SQLite backup when a current production DB exists. It installs the new release
 side by side, builds its Linux ARM64 venv, switches `/opt/olympus/current`
 atomically, and verifies Core health. It never deletes prior releases or durable
 state, so at least the previous application tree remains available.
+
+A normal update never starts or restarts `olympus-kiosk.service`. Core and the
+same-origin Display may change while the already-running browser remains on
+`http://127.0.0.1:8000/` and reconnects. Initial provisioning may use
+`--enable-kiosk`; physical-runtime maintenance must use `--restart-kiosk`.
 
 A versioned release directory is immutable once created. Reinstalling an artifact
 with identical version, revision, and source-tree provenance reuses it without
@@ -434,10 +485,10 @@ was:
 2. Reboot Hermes; verify Core and timers return without SSH intervention.
 3. Enroll a real packaged Agent; reboot and confirm authentication reconnects.
 4. Attach HDMI, install kiosk packages, and enable `olympus-kiosk`.
-5. Verify Cage/Chromium fullscreen with no desktop, login screen, or browser UI.
+5. Verify Cage/Brave fullscreen with no desktop, login screen, or browser UI.
 6. Kill Core; verify systemd restart and WebSocket recovery without browser
    restart.
-7. Kill Chromium and then Cage; verify kiosk-only recovery.
+7. Kill Brave and then Cage; verify kiosk-only recovery.
 8. Disconnect/restore WAN; verify local Display/Core/Agents remain alive and
    collectors recover.
 9. Unplug/replug HDMI; verify kiosk service recovery without host reboot.
@@ -447,4 +498,33 @@ was:
 
 WALL hardware acceptance is complete. Future releases should repeat the relevant
 checks when changing startup, kiosk, display, backup, watchdog, or host-integration
-behavior; the v1.0 metadata-only baseline change does not alter those behaviors.
+behavior. The 1.0.3 procedure below is the required acceptance for the finalized
+native-browser runtime.
+
+### 1.0.3 final real-Hermes acceptance
+
+1. Verify the archive checksum and metadata, then record `systemctl cat
+   olympus-kiosk.service`, the two known drop-ins, current Core health, and
+   `systemctl show olympus-kiosk.service -p ActiveState -p SubState -p Result
+   -p NRestarts -p ExecMainStatus`.
+2. Run `install.sh --dry-run`, then deploy 1.0.3 normally with no kiosk flag.
+   Confirm the database backup, immutable release switch, healthy 1.0.3 Core,
+   and that the kiosk main PID did not change.
+3. Confirm the WALL reconnects and renders correctly; inspect
+   `journalctl -u olympus-kiosk.service` and verify the service is still active
+   with no deployment-induced restart.
+4. Verify `/usr/bin/brave-browser`, the Brave profile path, the exact effective
+   `cage -d -s --` command, journal output, runtime directory ownership/mode,
+   `Restart=always`, `RestartSec=10s`, and the 5-minute/6-start limit.
+5. Audit and remove only redundant Olympus drop-ins as described above, run
+   `systemctl daemon-reload`, then intentionally run `install.sh
+   --restart-kiosk` once. Confirm a new Cage/Brave process becomes active with
+   `Result=success` and `ExecMainStatus=0`.
+6. Send SIGKILL to Cage once. Confirm systemd records the failure, waits ten
+   seconds, launches a new process, and returns the WALL to active/running with
+   `NRestarts` incremented.
+7. In a controlled maintenance window, repeat rapid manual starts to confirm the
+   sixth start is rate-limited, then recover with `systemctl reset-failed
+   olympus-kiosk.service` followed by `systemctl start olympus-kiosk.service`.
+8. Reconfirm Core health, WALL rendering, backup integrity, Agent reconnection,
+   and read-only status of Pi-hole, Pterodactyl, Docker, SSH, networking, and WOL.

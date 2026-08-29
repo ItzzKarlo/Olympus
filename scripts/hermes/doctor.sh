@@ -132,10 +132,10 @@ else
 fi
 
 command -v cage >/dev/null 2>&1 && pass "Cage available" || warn "Cage unavailable (kiosk optional)"
-if command -v chromium >/dev/null 2>&1 || command -v chromium-browser >/dev/null 2>&1; then
-    pass "Chromium available"
+if [ -x /usr/bin/brave-browser ]; then
+    pass "Brave available"
 else
-    warn "Chromium unavailable (kiosk optional)"
+    warn "Brave unavailable (kiosk optional)"
 fi
 if grep -q '^connected$' "$ROOT"/sys/class/drm/card*-*/status 2>/dev/null; then
     pass "connected DRM display present"

@@ -144,7 +144,7 @@ Core exposes:
 - `WS /ws/display` — live interpreted state for displays
 
 For the unattended Raspberry Pi production deployment, including the compiled
-same-origin Display, safe backups, health watchdog, and optional Cage/Chromium
+same-origin Display, safe backups, health watchdog, and optional Cage/Brave
 kiosk, see [Hermes production deployment](docs/hermes-deployment.md).
 
 High-frequency observations remain intentionally in memory. Durable device trust,
@@ -1155,7 +1155,7 @@ VITE_OLYMPUS_CORE_WS=ws://10.10.0.10:8000/ws/display npm run dev
 For v1.0, the same Display remains available through Vite during development and
 is compiled into static assets served directly by Core in production. The
 accepted WALL deployment launches those assets through the minimal
-Cage/Chromium kiosk on Hermes.
+Cage/Brave kiosk on Hermes.
 
 ## Test
 

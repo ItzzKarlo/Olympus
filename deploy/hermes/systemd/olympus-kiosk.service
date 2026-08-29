@@ -1,5 +1,5 @@
 [Unit]
-Description=Olympus Cage/Chromium kiosk on tty1
+Description=Olympus native Wayland kiosk on tty1
 Wants=olympus-core.service dbus.socket systemd-logind.service
 After=olympus-core.service systemd-user-sessions.service dbus.socket systemd-logind.service
 Conflicts=getty@tty1.service
@@ -19,6 +19,11 @@ TTYReset=true
 TTYVHangup=true
 TTYVTDisallocate=true
 StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+RuntimeDirectory=olympus-kiosk
+RuntimeDirectoryMode=0700
+Environment=XDG_RUNTIME_DIR=/run/olympus-kiosk
 Environment=WLR_LIBINPUT_NO_DEVICES=1
 EnvironmentFile=-/etc/olympus/kiosk.env
 ExecStart=/opt/olympus/current/scripts/hermes/start-kiosk.sh
@@ -28,7 +33,7 @@ TimeoutStopSec=20s
 KillMode=mixed
 UMask=0077
 
-# Keep Chromium's normal sandbox available; do not add NoNewPrivileges here.
+# Keep the browser's normal sandbox available; do not add NoNewPrivileges here.
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only

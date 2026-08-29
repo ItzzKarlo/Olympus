@@ -2,24 +2,21 @@
 set -eu
 
 CORE_URL=${OLYMPUS_CORE_URL:-http://127.0.0.1:8000}
-PROFILE=${OLYMPUS_KIOSK_PROFILE:-/home/olympus-display/.config/olympus-chromium}
+PROFILE=${OLYMPUS_KIOSK_PROFILE:-/home/olympus-display/.config/olympus-brave}
 DRM_ROOT=${OLYMPUS_DRM_ROOT:-/sys/class/drm}
 WAIT_SECONDS=${OLYMPUS_KIOSK_WAIT_SECONDS:-3}
 MONITOR_WAIT_SECONDS=${OLYMPUS_KIOSK_MONITOR_WAIT_SECONDS:-10}
 MAX_WAIT_ATTEMPTS=${OLYMPUS_KIOSK_MAX_WAIT_ATTEMPTS:-0}
 CURL=${CURL_BIN:-curl}
 CAGE=${CAGE_BIN:-}
-BROWSER=${BROWSER_BIN:-}
+BROWSER=${BROWSER_BIN:-/usr/bin/brave-browser}
 PROC_ROOT=${OLYMPUS_PROC_ROOT:-/proc}
 
 if [ -z "$CAGE" ]; then
     CAGE=$(command -v cage || true)
 fi
-if [ -z "$BROWSER" ]; then
-    BROWSER=$(command -v chromium || command -v chromium-browser || true)
-fi
 if [ -z "$CAGE" ] || [ -z "$BROWSER" ]; then
-    echo "Olympus kiosk requires both Cage and Chromium." >&2
+    echo "Olympus kiosk requires both Cage and a browser." >&2
     exit 1
 fi
 
@@ -48,7 +45,7 @@ profile_in_use() {
 
 clear_stale_singletons() {
     if profile_in_use; then
-        echo "Refusing to remove Chromium singleton markers from an active profile." >&2
+        echo "Refusing to remove browser singleton markers from an active profile." >&2
         return 1
     fi
     rm -f -- \

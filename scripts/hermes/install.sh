@@ -7,14 +7,19 @@ RELEASE_DIR=$DEFAULT_RELEASE
 INSTALL_CORE_PACKAGES=0
 INSTALL_KIOSK_PACKAGES=0
 ENABLE_KIOSK=0
+RESTART_KIOSK=0
 NO_START=0
 DRY_RUN=0
 PARTIAL_TARGET=
+BRAVE_KEY_TEMP=
+BRAVE_SOURCE_TEMP=
 
 cleanup_partial_release() {
     if [ -n "$PARTIAL_TARGET" ] && [ -d "$PARTIAL_TARGET" ]; then
         rm -rf -- "$PARTIAL_TARGET"
     fi
+    [ -z "$BRAVE_KEY_TEMP" ] || rm -f -- "$BRAVE_KEY_TEMP"
+    [ -z "$BRAVE_SOURCE_TEMP" ] || rm -f -- "$BRAVE_SOURCE_TEMP"
 }
 trap cleanup_partial_release EXIT
 trap 'exit 130' INT TERM
@@ -24,8 +29,9 @@ usage() {
 Usage: install.sh [options]
   --release-dir PATH        extracted Olympus release (default: this release)
   --install-core-packages   apt-install declared Core prerequisites
-  --install-kiosk-packages  apt-install Cage, Chromium transition package, fonts, PAM
+  --install-kiosk-packages  apt-install Cage, native Brave, fonts, and PAM
   --enable-kiosk            enable the tty1 kiosk after installing it
+  --restart-kiosk           intentionally restart the installed kiosk
   --no-start                install files and units without starting Olympus
   --dry-run                 print the resolved plan without changing the host
 EOF
@@ -37,12 +43,18 @@ while [ "$#" -gt 0 ]; do
         --install-core-packages) INSTALL_CORE_PACKAGES=1; shift ;;
         --install-kiosk-packages) INSTALL_KIOSK_PACKAGES=1; shift ;;
         --enable-kiosk) ENABLE_KIOSK=1; shift ;;
+        --restart-kiosk) RESTART_KIOSK=1; shift ;;
         --no-start) NO_START=1; shift ;;
         --dry-run) DRY_RUN=1; shift ;;
         --help|-h) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
 done
+
+if [ "$RESTART_KIOSK" -eq 1 ] && [ "$NO_START" -eq 1 ]; then
+    echo "--restart-kiosk and --no-start cannot be used together." >&2
+    exit 2
+fi
 
 RELEASE_DIR=$(CDPATH= cd -- "$RELEASE_DIR" && pwd)
 VERSION=$(tr -d '[:space:]' < "$RELEASE_DIR/VERSION")
@@ -88,6 +100,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
     echo "Core packages requested: $INSTALL_CORE_PACKAGES"
     echo "Kiosk packages requested: $INSTALL_KIOSK_PACKAGES"
     echo "Kiosk enable requested: $ENABLE_KIOSK"
+    echo "Kiosk restart requested: $RESTART_KIOSK"
     exit 0
 fi
 
@@ -103,16 +116,44 @@ if [ "$INSTALL_CORE_PACKAGES" -eq 1 ]; then
     apt-get install --no-install-recommends python3 python3-venv python3-pip curl ca-certificates
 fi
 if [ "$INSTALL_KIOSK_PACKAGES" -eq 1 ]; then
-    apt-get install --no-install-recommends cage chromium-browser fonts-noto-core fonts-noto-color-emoji libpam-systemd
+    ARCHITECTURE=$(dpkg --print-architecture)
+    case "$ARCHITECTURE" in
+        arm64|amd64) ;;
+        *) echo "Brave kiosk packages require an arm64 or amd64 host (found $ARCHITECTURE)." >&2; exit 1 ;;
+    esac
+
+    apt-get install --no-install-recommends curl ca-certificates
+    BRAVE_KEYRING=/usr/share/keyrings/brave-browser-archive-keyring.gpg
+    BRAVE_SOURCE=/etc/apt/sources.list.d/brave-browser-release.sources
+    BRAVE_KEY_TEMP=$(mktemp)
+    BRAVE_SOURCE_TEMP=$(mktemp)
+    curl --fail --silent --show-error --location \
+        --output "$BRAVE_KEY_TEMP" \
+        https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg
+    curl --fail --silent --show-error --location \
+        --output "$BRAVE_SOURCE_TEMP" \
+        https://brave-browser-apt-release.s3.brave.com/brave-browser.sources
+    [ -s "$BRAVE_KEY_TEMP" ] || { echo "Downloaded Brave signing key is empty." >&2; exit 1; }
+    [ -s "$BRAVE_SOURCE_TEMP" ] || { echo "Downloaded Brave apt source is empty." >&2; exit 1; }
+    install -d -o root -g root -m 0755 /usr/share/keyrings /etc/apt/sources.list.d
+    if ! cmp -s "$BRAVE_KEY_TEMP" "$BRAVE_KEYRING"; then
+        install -o root -g root -m 0644 "$BRAVE_KEY_TEMP" "$BRAVE_KEYRING"
+    fi
+    if ! cmp -s "$BRAVE_SOURCE_TEMP" "$BRAVE_SOURCE"; then
+        install -o root -g root -m 0644 "$BRAVE_SOURCE_TEMP" "$BRAVE_SOURCE"
+    fi
+    rm -f -- "$BRAVE_KEY_TEMP" "$BRAVE_SOURCE_TEMP"
+    BRAVE_KEY_TEMP=
+    BRAVE_SOURCE_TEMP=
+    apt-get update
+    apt-get install --no-install-recommends cage brave-browser fonts-noto-core fonts-noto-color-emoji libpam-systemd
+    [ -x /usr/bin/brave-browser ] || { echo "Brave installation did not provide /usr/bin/brave-browser." >&2; exit 1; }
 fi
 
 command -v curl >/dev/null 2>&1 || { echo "curl is required." >&2; exit 1; }
-if [ "$ENABLE_KIOSK" -eq 1 ]; then
-    command -v cage >/dev/null 2>&1 || { echo "Cage is required before enabling kiosk." >&2; exit 1; }
-    if ! command -v chromium >/dev/null 2>&1 && ! command -v chromium-browser >/dev/null 2>&1; then
-        echo "Chromium is required before enabling kiosk." >&2
-        exit 1
-    fi
+if [ "$ENABLE_KIOSK" -eq 1 ] || [ "$RESTART_KIOSK" -eq 1 ]; then
+    command -v cage >/dev/null 2>&1 || { echo "Cage is required before managing kiosk." >&2; exit 1; }
+    [ -x /usr/bin/brave-browser ] || { echo "/usr/bin/brave-browser is required before managing kiosk." >&2; exit 1; }
 fi
 
 if ! id olympus >/dev/null 2>&1; then
@@ -211,8 +252,12 @@ if [ "$NO_START" -eq 0 ]; then
 fi
 if [ "$ENABLE_KIOSK" -eq 1 ]; then
     systemctl enable olympus-kiosk.service
-    if [ "$NO_START" -eq 0 ]; then
+fi
+if [ "$NO_START" -eq 0 ]; then
+    if [ "$RESTART_KIOSK" -eq 1 ]; then
         systemctl restart olympus-kiosk.service
+    elif [ "$ENABLE_KIOSK" -eq 1 ] && ! systemctl is-active --quiet olympus-kiosk.service; then
+        systemctl start olympus-kiosk.service
     fi
 fi
 

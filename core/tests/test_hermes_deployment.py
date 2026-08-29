@@ -63,6 +63,7 @@ class HermesScriptTests(unittest.TestCase):
         installer = installer.replace("/opt/olympus", str(root / "opt" / "olympus"))
         installer = installer.replace("/var/lib/olympus/core.db", str(database))
         installer = installer.replace("/etc/olympus/config.toml", str(config))
+        installer = installer.replace("/usr/bin/brave-browser", str(root / "fake-bin" / "brave-browser"))
         install_path = scripts / "install.sh"
         install_path.write_text(installer, encoding="utf-8")
         install_path.chmod(0o755)
@@ -104,7 +105,18 @@ class HermesScriptTests(unittest.TestCase):
                 "exec \"$TEST_REAL_PYTHON\" \"$@\"\n"
             ),
             "chown": "#!/bin/sh\nexit 0\n",
-            "systemctl": "#!/bin/sh\nexit 0\n",
+            "systemctl": (
+                "#!/bin/sh\n"
+                "[ -z \"${TEST_SYSTEMCTL_LOG:-}\" ] || printf '%s\\n' \"$*\" >> \"$TEST_SYSTEMCTL_LOG\"\n"
+                "if [ \"${1:-}\" = is-active ]; then\n"
+                "    [ \"${TEST_KIOSK_ACTIVE:-0}\" = 1 ]\n"
+                "    exit $?\n"
+                "fi\n"
+                "exit 0\n"
+            ),
+            "curl": "#!/bin/sh\nexit 0\n",
+            "cage": "#!/bin/sh\nexit 0\n",
+            "brave-browser": "#!/bin/sh\nexit 0\n",
             "mv": (
                 "#!/bin/sh\n"
                 "if [ \"${1:-}\" = -Tf ]; then\n"
@@ -130,7 +142,7 @@ class HermesScriptTests(unittest.TestCase):
 
     def test_product_and_component_version_declarations_are_synchronized(self) -> None:
         version = (ROOT / "VERSION").read_text(encoding="ascii").strip()
-        self.assertEqual(version, "1.0.2")
+        self.assertEqual(version, "1.0.3")
         self.assertEqual(json.loads((ROOT / "display" / "package.json").read_text())["version"], version)
         common_package = tomllib.loads(
             (ROOT / "agents" / "common" / "pyproject.toml").read_text(encoding="utf-8")
@@ -160,12 +172,10 @@ class HermesScriptTests(unittest.TestCase):
         self.assertIn('COPYFILE_DISABLE=1', builder)
         self.assertIn("-name '._*'", builder)
 
-    def test_kiosk_command_is_cage_021_compatible_and_keeps_chromium_arguments(self) -> None:
+    def test_kiosk_command_uses_native_brave_defaults_and_cage_021_arguments(self) -> None:
         environment = {
             **os.environ,
             "CAGE_BIN": "/usr/bin/cage",
-            "BROWSER_BIN": "/snap/bin/chromium",
-            "OLYMPUS_KIOSK_PROFILE": "/home/kiosk/profile",
         }
         result = subprocess.run(
             [HERMES_SCRIPTS / "start-kiosk.sh", "--print-command"],
@@ -179,7 +189,7 @@ class HermesScriptTests(unittest.TestCase):
             "-d",
             "-s",
             "--",
-            "/snap/bin/chromium",
+            "/usr/bin/brave-browser",
             "--ozone-platform=wayland",
             "--kiosk",
             "--no-first-run",
@@ -187,11 +197,29 @@ class HermesScriptTests(unittest.TestCase):
             "--disable-session-crashed-bubble",
             "--disable-translate",
             "--overscroll-history-navigation=0",
-            "--user-data-dir=/home/kiosk/profile",
+            "--user-data-dir=/home/olympus-display/.config/olympus-brave",
             "http://127.0.0.1:8000/",
         ])
         self.assertNotIn("-x", shlex.split(result.stdout))
         self.assertNotIn("--no-sandbox", result.stdout)
+        self.assertNotIn("/snap/", result.stdout)
+
+    def test_kiosk_browser_and_profile_remain_explicitly_overridable(self) -> None:
+        result = subprocess.run(
+            [HERMES_SCRIPTS / "start-kiosk.sh", "--print-command"],
+            env={
+                **os.environ,
+                "CAGE_BIN": "/usr/bin/cage",
+                "BROWSER_BIN": "/opt/browser/custom-browser",
+                "OLYMPUS_KIOSK_PROFILE": "/srv/olympus/custom-profile",
+            },
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        arguments = shlex.split(result.stdout)
+        self.assertEqual(arguments[4], "/opt/browser/custom-browser")
+        self.assertIn("--user-data-dir=/srv/olympus/custom-profile", arguments)
 
     def test_kiosk_exec_path_is_accepted_by_cage_021_argument_surface(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -217,7 +245,7 @@ printf '%s\n' "$@" > "$CAGE_ARGUMENTS"
                 env={
                     **os.environ,
                     "CAGE_BIN": str(cage),
-                    "BROWSER_BIN": "/snap/bin/chromium",
+                    "BROWSER_BIN": "/usr/bin/brave-browser",
                     "CURL_BIN": "/usr/bin/true",
                     "OLYMPUS_DRM_ROOT": str(root / "drm"),
                     "OLYMPUS_KIOSK_PROFILE": str(root / "profile"),
@@ -233,7 +261,7 @@ printf '%s\n' "$@" > "$CAGE_ARGUMENTS"
                 "-d",
                 "-s",
                 "--",
-                "/snap/bin/chromium",
+                "/usr/bin/brave-browser",
                 "--ozone-platform=wayland",
                 "--kiosk",
                 "--no-first-run",
@@ -258,7 +286,7 @@ printf '%s\n' "$@" > "$CAGE_ARGUMENTS"
         environment = {
             **os.environ,
             "CAGE_BIN": str(cage),
-            "BROWSER_BIN": "/snap/bin/chromium",
+            "BROWSER_BIN": "/usr/bin/brave-browser",
             "CURL_BIN": "/usr/bin/true",
             "KIOSK_STARTED": str(started),
             "OLYMPUS_DRM_ROOT": str(root / "drm"),
@@ -300,7 +328,7 @@ printf '%s\n' "$@" > "$CAGE_ARGUMENTS"
             for name, content in preserved.items():
                 self.assertEqual((profile / name).read_text(encoding="utf-8"), content)
 
-    def test_kiosk_absent_markers_and_unrelated_chromium_profile_are_harmless(self) -> None:
+    def test_kiosk_absent_markers_and_unrelated_browser_profile_are_harmless(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             profile = root / "profile"
@@ -309,7 +337,7 @@ printf '%s\n' "$@" > "$CAGE_ARGUMENTS"
             process = root / "proc" / "202"
             process.mkdir()
             (process / "cmdline").write_bytes(
-                b"/snap/bin/chromium\0--user-data-dir=/home/other/profile\0"
+                b"/usr/bin/brave-browser\0--user-data-dir=/home/other/profile\0"
             )
 
             result = subprocess.run(
@@ -334,7 +362,7 @@ printf '%s\n' "$@" > "$CAGE_ARGUMENTS"
             process = root / "proc" / "303"
             process.mkdir()
             (process / "cmdline").write_bytes(
-                b"/snap/bin/chromium\0--user-data-dir=" + str(profile).encode() + b"\0"
+                b"/usr/bin/brave-browser\0--user-data-dir=" + str(profile).encode() + b"\0"
             )
 
             result = subprocess.run(
@@ -359,7 +387,7 @@ printf '%s\n' "$@" > "$CAGE_ARGUMENTS"
             environment = {
                 **os.environ,
                 "CAGE_BIN": "/usr/bin/cage",
-                "BROWSER_BIN": "/snap/bin/chromium",
+                "BROWSER_BIN": "/usr/bin/brave-browser",
                 "OLYMPUS_DRM_ROOT": directory,
             }
             disconnected = subprocess.run(
@@ -415,7 +443,7 @@ printf '%s\n' "$@" > "$CAGE_ARGUMENTS"
                 env={
                     **os.environ,
                     "CAGE_BIN": str(cage),
-                    "BROWSER_BIN": "/usr/bin/chromium",
+                    "BROWSER_BIN": "/usr/bin/brave-browser",
                     "CURL_BIN": str(curl),
                     "CURL_ATTEMPTS": str(attempts),
                     "KIOSK_STARTED": str(started),
@@ -464,7 +492,93 @@ printf '%s\n' "$@" > "$CAGE_ARGUMENTS"
             self.assertIn("/opt/olympus/releases/1.0.0", result.stdout)
             self.assertIn(f"Revision: {REVISION}", result.stdout)
             self.assertIn("Kiosk enable requested: 1", result.stdout)
+            self.assertIn("Kiosk restart requested: 0", result.stdout)
             self.assertEqual(before, sorted(release.iterdir()))
+
+    def test_kiosk_package_plan_uses_idempotent_official_brave_arm64_repository(self) -> None:
+        installer = (HERMES_SCRIPTS / "install.sh").read_text(encoding="utf-8")
+        production_kiosk_files = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (
+                HERMES_SCRIPTS / "install.sh",
+                HERMES_SCRIPTS / "start-kiosk.sh",
+                ROOT / "deploy" / "hermes" / "kiosk.env.example",
+            )
+        )
+        self.assertIn("dpkg --print-architecture", installer)
+        self.assertIn("arm64|amd64", installer)
+        self.assertIn("brave-browser-archive-keyring.gpg", installer)
+        self.assertIn("brave-browser-release.sources", installer)
+        self.assertIn("https://brave-browser-apt-release.s3.brave.com/brave-browser.sources", installer)
+        self.assertIn('cmp -s "$BRAVE_KEY_TEMP" "$BRAVE_KEYRING"', installer)
+        self.assertIn('cmp -s "$BRAVE_SOURCE_TEMP" "$BRAVE_SOURCE"', installer)
+        self.assertIn("cage brave-browser fonts-noto-core", installer)
+        self.assertIn("[ -x /usr/bin/brave-browser ]", installer)
+        self.assertNotIn("curl | sh", installer)
+        self.assertNotIn("chromium-browser", production_kiosk_files)
+        self.assertNotIn("/snap/bin/chromium", production_kiosk_files)
+
+    def test_installer_separates_enable_start_and_explicit_kiosk_restart(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            core = self.production_core_fixture(root)
+            config, database, _backups = self.production_config(root)
+            installer, environment, _marker = self.installer_fixture(
+                root, core, database, config
+            )
+            target = root / "opt" / "olympus" / "releases" / "1.0.0"
+            target.mkdir(parents=True)
+            (target / "VERSION").write_text("1.0.0\n", encoding="ascii")
+            (target / "RELEASE-METADATA.json").write_text(json.dumps({
+                "revision": REVISION,
+                "source_tree": "clean",
+                "version": "1.0.0",
+            }), encoding="ascii")
+            current = root / "opt" / "olympus" / "current"
+            current.symlink_to("releases/1.0.0")
+            log = root / "systemctl.log"
+            environment["TEST_SYSTEMCTL_LOG"] = str(log)
+
+            def invoke(*arguments: str, active: bool) -> list[str]:
+                log.unlink(missing_ok=True)
+                result = subprocess.run(
+                    [installer, *arguments],
+                    cwd=root,
+                    env={
+                        **environment,
+                        "TEST_KIOSK_ACTIVE": "1" if active else "0",
+                    },
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                return log.read_text(encoding="utf-8").splitlines()
+
+            normal_update = invoke(active=True)
+            self.assertNotIn("start olympus-kiosk.service", normal_update)
+            self.assertNotIn("restart olympus-kiosk.service", normal_update)
+
+            enable_healthy = invoke("--enable-kiosk", active=True)
+            self.assertIn("enable olympus-kiosk.service", enable_healthy)
+            self.assertIn("is-active --quiet olympus-kiosk.service", enable_healthy)
+            self.assertNotIn("start olympus-kiosk.service", enable_healthy)
+            self.assertNotIn("restart olympus-kiosk.service", enable_healthy)
+
+            enable_absent = invoke("--enable-kiosk", active=False)
+            self.assertIn("start olympus-kiosk.service", enable_absent)
+            self.assertNotIn("restart olympus-kiosk.service", enable_absent)
+
+            explicit_restart = invoke("--restart-kiosk", active=True)
+            self.assertIn("restart olympus-kiosk.service", explicit_restart)
+
+    def test_installer_rejects_conflicting_restart_and_no_start_actions(self) -> None:
+        result = subprocess.run(
+            [HERMES_SCRIPTS / "install.sh", "--restart-kiosk", "--no-start"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("cannot be used together", result.stderr)
 
     def test_installer_reuses_same_version_with_identical_provenance_unchanged(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -882,6 +996,12 @@ class SystemdTemplateTests(unittest.TestCase):
         self.assertIn("RestartSec=10s", unit)
         self.assertIn("StartLimitIntervalSec=5min", unit)
         self.assertIn("StartLimitBurst=6", unit)
+        self.assertIn("StandardOutput=journal", unit)
+        self.assertIn("StandardError=journal", unit)
+        self.assertIn("RuntimeDirectory=olympus-kiosk", unit)
+        self.assertIn("RuntimeDirectoryMode=0700", unit)
+        self.assertIn("Environment=XDG_RUNTIME_DIR=/run/olympus-kiosk", unit)
+        self.assertNotIn("Chromium", unit)
         self.assertIn("CPUWeight=50", unit)
         self.assertIn("OOMScoreAdjust=200", unit)
         self.assertNotIn("Requires=olympus-core", unit)
