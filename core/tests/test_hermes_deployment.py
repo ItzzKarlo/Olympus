@@ -130,7 +130,7 @@ class HermesScriptTests(unittest.TestCase):
 
     def test_product_and_component_version_declarations_are_synchronized(self) -> None:
         version = (ROOT / "VERSION").read_text(encoding="ascii").strip()
-        self.assertEqual(version, "1.0.1")
+        self.assertEqual(version, "1.0.2")
         self.assertEqual(json.loads((ROOT / "display" / "package.json").read_text())["version"], version)
         common_package = tomllib.loads(
             (ROOT / "agents" / "common" / "pyproject.toml").read_text(encoding="utf-8")
@@ -244,6 +244,111 @@ printf '%s\n' "$@" > "$CAGE_ARGUMENTS"
                 f"--user-data-dir={root / 'profile'}",
                 "http://127.0.0.1:8000/",
             ])
+
+    def kiosk_cleanup_fixture(self, root: Path, profile: Path) -> tuple[dict[str, str], Path]:
+        drm = root / "drm" / "card0-HDMI-A-1"
+        drm.mkdir(parents=True)
+        (drm / "status").write_text("connected\n", encoding="ascii")
+        cage = root / "cage"
+        started = root / "kiosk-started"
+        cage.write_text("#!/bin/sh\ntouch \"$KIOSK_STARTED\"\n", encoding="ascii")
+        cage.chmod(0o755)
+        proc = root / "proc"
+        proc.mkdir()
+        environment = {
+            **os.environ,
+            "CAGE_BIN": str(cage),
+            "BROWSER_BIN": "/snap/bin/chromium",
+            "CURL_BIN": "/usr/bin/true",
+            "KIOSK_STARTED": str(started),
+            "OLYMPUS_DRM_ROOT": str(root / "drm"),
+            "OLYMPUS_KIOSK_PROFILE": str(profile),
+            "OLYMPUS_PROC_ROOT": str(proc),
+            "XDG_RUNTIME_DIR": str(root / "runtime"),
+        }
+        return environment, started
+
+    def test_kiosk_removes_only_stale_singleton_markers_from_inactive_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            profile = root / "profile"
+            profile.mkdir()
+            (profile / "SingletonLock").write_text("stale-lock", encoding="ascii")
+            (profile / "SingletonCookie").write_text("stale-cookie", encoding="ascii")
+            (profile / "SingletonSocket").symlink_to(root / "missing-socket")
+            preserved = {
+                "History": "history-data",
+                "Preferences": "preferences-data",
+                "SingletonBackup": "not-a-known-marker",
+            }
+            for name, content in preserved.items():
+                (profile / name).write_text(content, encoding="utf-8")
+            environment, started = self.kiosk_cleanup_fixture(root, profile)
+
+            result = subprocess.run(
+                [HERMES_SCRIPTS / "start-kiosk.sh"],
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue(started.exists())
+            for marker in ("SingletonLock", "SingletonCookie", "SingletonSocket"):
+                self.assertFalse((profile / marker).exists())
+                self.assertFalse((profile / marker).is_symlink())
+            for name, content in preserved.items():
+                self.assertEqual((profile / name).read_text(encoding="utf-8"), content)
+
+    def test_kiosk_absent_markers_and_unrelated_chromium_profile_are_harmless(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            profile = root / "profile"
+            profile.mkdir()
+            environment, started = self.kiosk_cleanup_fixture(root, profile)
+            process = root / "proc" / "202"
+            process.mkdir()
+            (process / "cmdline").write_bytes(
+                b"/snap/bin/chromium\0--user-data-dir=/home/other/profile\0"
+            )
+
+            result = subprocess.run(
+                [HERMES_SCRIPTS / "start-kiosk.sh"],
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue(started.exists())
+
+    def test_kiosk_live_process_using_exact_profile_prevents_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            profile = root / "profile"
+            profile.mkdir()
+            markers = ("SingletonLock", "SingletonCookie", "SingletonSocket")
+            for marker in markers:
+                (profile / marker).write_text("keep", encoding="ascii")
+            environment, started = self.kiosk_cleanup_fixture(root, profile)
+            process = root / "proc" / "303"
+            process.mkdir()
+            (process / "cmdline").write_bytes(
+                b"/snap/bin/chromium\0--user-data-dir=" + str(profile).encode() + b"\0"
+            )
+
+            result = subprocess.run(
+                [HERMES_SCRIPTS / "start-kiosk.sh"],
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("profile is already used by live process 303", result.stderr)
+            self.assertFalse(started.exists())
+            for marker in markers:
+                self.assertEqual((profile / marker).read_text(encoding="ascii"), "keep")
 
     def test_kiosk_detects_monitor_and_bounds_core_wait_in_test_mode(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

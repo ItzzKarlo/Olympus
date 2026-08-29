@@ -10,6 +10,7 @@ MAX_WAIT_ATTEMPTS=${OLYMPUS_KIOSK_MAX_WAIT_ATTEMPTS:-0}
 CURL=${CURL_BIN:-curl}
 CAGE=${CAGE_BIN:-}
 BROWSER=${BROWSER_BIN:-}
+PROC_ROOT=${OLYMPUS_PROC_ROOT:-/proc}
 
 if [ -z "$CAGE" ]; then
     CAGE=$(command -v cage || true)
@@ -30,6 +31,30 @@ monitor_connected() {
         fi
     done
     return 1
+}
+
+profile_in_use() {
+    for cmdline in "$PROC_ROOT"/[0-9]*/cmdline; do
+        [ -r "$cmdline" ] || continue
+        if tr '\000' '\n' < "$cmdline" | grep -Fqx -- "--user-data-dir=$PROFILE"; then
+            pid=${cmdline%/cmdline}
+            pid=${pid##*/}
+            echo "Olympus kiosk profile is already used by live process $pid: $PROFILE" >&2
+            return 0
+        fi
+    done
+    return 1
+}
+
+clear_stale_singletons() {
+    if profile_in_use; then
+        echo "Refusing to remove Chromium singleton markers from an active profile." >&2
+        return 1
+    fi
+    rm -f -- \
+        "$PROFILE/SingletonLock" \
+        "$PROFILE/SingletonCookie" \
+        "$PROFILE/SingletonSocket"
 }
 
 if [ "${1:-}" = "--print-command" ] || [ "${OLYMPUS_KIOSK_DRY_RUN:-0}" = "1" ]; then
@@ -62,6 +87,7 @@ if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
     export XDG_RUNTIME_DIR
 fi
 mkdir -p "$PROFILE"
+clear_stale_singletons
 
 exec "$CAGE" -d -s -- "$BROWSER" \
     --ozone-platform=wayland \

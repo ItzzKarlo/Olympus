@@ -1,9 +1,10 @@
 # Hermes production deployment
 
-This document installs Olympus 1.0.1 as one respectful workload on the existing
-Hermes host. WALL originally launched and was accepted as 1.0.0; 1.0.1 is the
-first post-WALL stabilization patch. The earlier v0.14.1 deployment remains the
-immediate pre-baseline predecessor.
+This document installs Olympus 1.0.2 as one respectful workload on the existing
+Hermes host. WALL originally launched and was accepted as 1.0.0; 1.0.1 was the
+deployed post-WALL stabilization patch, and 1.0.2 fixes stale Chromium profile
+ownership markers during kiosk restart. The earlier v0.14.1 deployment remains
+the immediate pre-baseline predecessor.
 
 > **Hermes is shared infrastructure.** The Olympus installer does not remove,
 > stop, replace, or reconfigure Pi-hole, Pterodactyl, Docker, SSH, Wake-on-LAN,
@@ -18,7 +19,7 @@ attached.
 ## Production shape
 
 ```text
-/opt/olympus/releases/1.0.1/   immutable application release
+/opt/olympus/releases/1.0.2/   immutable application release
 /opt/olympus/current           atomic symlink to the active release
 /opt/olympus/current/RELEASE-METADATA.json  immutable build provenance
 /etc/olympus/config.toml       non-secret production configuration
@@ -77,16 +78,16 @@ scripts/hermes/build-release.sh --skip-node-install
 The result is:
 
 ```text
-dist/hermes/olympus-1.0.1-hermes-arm64.tar.gz
-dist/hermes/olympus-1.0.1-hermes-arm64.tar.gz.sha256
+dist/hermes/olympus-1.0.2-hermes-arm64.tar.gz
+dist/hermes/olympus-1.0.2-hermes-arm64.tar.gz.sha256
 ```
 
 Verify the checksum after transferring both files to Hermes, then extract:
 
 ```bash
-sha256sum -c olympus-1.0.1-hermes-arm64.tar.gz.sha256
-tar -xzf olympus-1.0.1-hermes-arm64.tar.gz
-cd olympus-1.0.1
+sha256sum -c olympus-1.0.2-hermes-arm64.tar.gz.sha256
+tar -xzf olympus-1.0.2-hermes-arm64.tar.gz
+cd olympus-1.0.2
 ```
 
 The archive contains portable Python source and static browser assets. The
@@ -311,6 +312,13 @@ The launcher:
 3. starts Cage on tty1;
 4. starts Chromium in kiosk mode with a dedicated profile and native Wayland;
 5. lets systemd restart only the kiosk when Chromium/Cage exits.
+
+Immediately before launching Cage, the launcher checks live process command
+lines for the exact configured kiosk `--user-data-dir`. If that profile is active,
+startup fails without modifying it. Otherwise the launcher removes only stale
+`SingletonLock`, `SingletonCookie`, and `SingletonSocket` entries left by an
+earlier Chromium process; history, preferences, cookies, cache, and all other
+profile data remain untouched.
 
 Cage supports output hotplug and exits after its final output is removed, so the
 service restart returns to the monitor-wait loop rather than rebooting Hermes.
