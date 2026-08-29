@@ -24,17 +24,20 @@ class SingleInstance:
                     handle.flush()
                 handle.seek(0)
                 msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                write_metadata = False
             else:
                 import fcntl
 
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                write_metadata = True
         except (BlockingIOError, OSError):
             handle.close()
             return False
-        handle.seek(0)
-        handle.truncate()
-        handle.write(f"{os.getpid()}\n".encode("ascii"))
-        handle.flush()
+        if write_metadata:
+            handle.seek(0)
+            handle.truncate()
+            handle.write(f"{os.getpid()}\n".encode("ascii"))
+            handle.flush()
         self._file = handle
         return True
 
