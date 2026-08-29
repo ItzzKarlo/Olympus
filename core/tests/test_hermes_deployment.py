@@ -635,15 +635,31 @@ printf '%s\n' "$@" > "$CAGE_ARGUMENTS"
                 else:
                     content = "test"
                 path.write_text(content, encoding="utf-8")
+            live_probe_marker = root / "live-probe-called"
+            fake_systemctl = root / "fake-systemctl"
+            fake_systemctl.write_text(
+                "#!/bin/sh\n"
+                "touch \"$LIVE_PROBE_MARKER\"\n"
+                "exit 99\n",
+                encoding="ascii",
+            )
+            fake_systemctl.chmod(0o755)
             before = sorted(str(path.relative_to(root)) for path in root.rglob("*"))
             result = subprocess.run(
                 [HERMES_SCRIPTS / "doctor.sh"],
-                env={**os.environ, "OLYMPUS_ROOT": str(root)},
+                env={
+                    **os.environ,
+                    "OLYMPUS_ROOT": str(root),
+                    "OLYMPUS_SYSTEMCTL": str(fake_systemctl),
+                    "LIVE_PROBE_MARKER": str(live_probe_marker),
+                },
                 capture_output=True,
                 text=True,
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn("live service probes skipped", result.stdout)
+            self.assertIn("rooted filesystem inspection", result.stdout)
+            self.assertIn("probes skipped", result.stdout)
+            self.assertFalse(live_probe_marker.exists())
             self.assertIn("release version: 1.0.0", result.stdout)
             self.assertIn(f"release revision: {REVISION}", result.stdout)
             after = sorted(str(path.relative_to(root)) for path in root.rglob("*"))
