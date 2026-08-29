@@ -338,6 +338,43 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([event.type for event in events], ["news.story.important", "news.story.major"])
         collector.stop()
 
+    async def test_expired_presentation_does_not_suppress_new_equal_priority_story(self) -> None:
+        settings = replace(SETTINGS, presentation=replace(
+            SETTINGS.presentation,
+            important_threshold=0.65,
+            news_scene_seconds=1,
+        ))
+        baseline = self.current_article(FEEDS[0], "Routine standards meeting", identifier="baseline")
+        first_title = "Emergency outage closes major rail network across Germany"
+        second_title = "Emergency evacuation closes major airport across Germany"
+        first = [
+            self.current_article(feed, first_title, identifier=f"first:{feed.id}", topic=NewsTopic.TRANSPORT)
+            for feed in FEEDS[:2]
+        ]
+        second = [
+            self.current_article(feed, second_title, identifier=f"second:{feed.id}", topic=NewsTopic.TRANSPORT)
+            for feed in FEEDS[:2]
+        ]
+        collector = NewsCollector(
+            settings,
+            StubProvider([
+                [self.current_result(FEEDS[0], baseline)],
+                [self.current_result(feed, item) for feed, item in zip(FEEDS, first)],
+                [self.current_result(feed, item) for feed, item in zip(FEEDS, second)],
+            ]),
+            lambda state: None,
+            lambda event: None,
+        )
+
+        await collector.poll_once(self.now)
+        active = await collector.poll_once(self.now + timedelta(seconds=1))
+        replacement = await collector.poll_once(self.now + timedelta(seconds=2))
+
+        self.assertEqual(active.active_story.headline, first_title)
+        self.assertEqual(replacement.active_story.headline, second_title)
+        self.assertEqual(replacement.presentation.started_at, self.now + timedelta(seconds=2))
+        collector.stop()
+
     async def test_presentation_memory_blocks_restart_repeat_but_allows_escalation(self) -> None:
         settings = replace(SETTINGS, presentation=replace(
             SETTINGS.presentation,

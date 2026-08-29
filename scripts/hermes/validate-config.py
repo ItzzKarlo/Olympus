@@ -13,6 +13,13 @@ import tomllib
 ENV_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
+def declared_value(keys: dict[str, tuple[int, str]], key: str) -> str:
+    value = keys.get(key, (0, ""))[1].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        value = value[1:-1].strip()
+    return value
+
+
 def parse_secrets(path: Path) -> tuple[dict[str, tuple[int, str]], list[str]]:
     keys: dict[str, tuple[int, str]] = {}
     errors: list[str] = []
@@ -25,7 +32,8 @@ def parse_secrets(path: Path) -> tuple[dict[str, tuple[int, str]], list[str]]:
         if not line or line.startswith("#"):
             continue
         if line.startswith("export "):
-            line = line[7:].lstrip()
+            errors.append(f"{path}:{number}: remove unsupported export prefix; expected KEY=value")
+            continue
         if "=" not in line:
             errors.append(f"{path}:{number}: expected KEY=value")
             continue
@@ -50,32 +58,50 @@ def validate(config_path: Path, secrets_path: Path) -> list[str]:
     errors.extend(secret_errors)
 
     security = config.get("security", {})
-    if isinstance(security, dict) and security.get("require_agent_auth") is not True:
+    if not isinstance(security, dict) or security.get("require_agent_auth") is not True:
         errors.append(f"{config_path}: security.require_agent_auth must be true in production")
 
-    integration_credentials = {
-        "calendar.enabled": (
-            bool(isinstance(config.get("calendar"), dict) and config["calendar"].get("enabled")),
-            {"OLYMPUS_GOOGLE_CLIENT_ID", "OLYMPUS_GOOGLE_CLIENT_SECRET", "OLYMPUS_GOOGLE_REFRESH_TOKEN"},
-        ),
-        "football.enabled": (
-            bool(isinstance(config.get("football"), dict) and config["football"].get("enabled")),
-            {"OLYMPUS_FOOTBALL_API_KEY", "OLYMPUS_FOOTBALL_DATA_API_KEY"},
-        ),
-    }
-    for label, (enabled, alternatives) in integration_credentials.items():
-        if enabled and not any(keys.get(key, (0, ""))[1] for key in alternatives):
+    calendar = config.get("calendar", {})
+    if isinstance(calendar, dict) and bool(calendar.get("enabled")):
+        provider = str(calendar.get("provider", "google")).strip().lower()
+        if provider != "google":
+            errors.append(f"{config_path}: calendar.provider is unsupported: {provider!r}")
+        else:
+            required = {
+                "OLYMPUS_GOOGLE_CLIENT_ID", "OLYMPUS_GOOGLE_CLIENT_SECRET", "OLYMPUS_GOOGLE_REFRESH_TOKEN"
+            }
+            missing = sorted(key for key in required if not declared_value(keys, key))
+            if missing:
+                errors.append(
+                    f"{config_path}: calendar.enabled=true but {secrets_path} is missing credential keys: "
+                    + ", ".join(missing)
+                )
+
+    football = config.get("football", {})
+    if isinstance(football, dict) and bool(football.get("enabled")):
+        provider = str(football.get("provider", "api-football")).strip().lower()
+        required_by_provider = {
+            "api-football": "OLYMPUS_FOOTBALL_API_KEY",
+            "football-data": "OLYMPUS_FOOTBALL_DATA_API_KEY",
+            "fixture": "OLYMPUS_FOOTBALL_FIXTURE_PATH",
+        }
+        required = required_by_provider.get(provider)
+        if required is None:
+            errors.append(f"{config_path}: football.provider is unsupported: {provider!r}")
+        elif not declared_value(keys, required):
             errors.append(
-                f"{config_path}: {label}=true but {secrets_path} declares no matching credential key"
+                f"{config_path}: football.enabled=true with provider {provider!r} but "
+                f"{secrets_path} is missing credential key {required}"
             )
-    spotify_enabled = keys.get("OLYMPUS_SPOTIFY_ENABLED", (0, ""))[1].casefold() in {
+
+    spotify_enabled = declared_value(keys, "OLYMPUS_SPOTIFY_ENABLED").casefold() in {
         "1", "true", "yes", "on"
     }
     spotify_credentials = {
         "OLYMPUS_SPOTIFY_CLIENT_ID", "OLYMPUS_SPOTIFY_CLIENT_SECRET", "OLYMPUS_SPOTIFY_REFRESH_TOKEN"
     }
     missing_spotify = {
-        key for key in spotify_credentials if not keys.get(key, (0, ""))[1]
+        key for key in spotify_credentials if not declared_value(keys, key)
     }
     if spotify_enabled and missing_spotify:
         missing = ", ".join(sorted(missing_spotify))

@@ -149,6 +149,22 @@ class LocalIntegrationTests(unittest.IsolatedAsyncioTestCase):
         writer.close()
         await writer.wait_closed()
 
+    async def test_clear_after_reconnect_is_forwarded_without_local_payload(self) -> None:
+        reader, writer = await self.connect()
+        await send(writer, HELLO)
+        await reader.readline()
+        await send(writer, {
+            "protocol": 1,
+            "type": "clear",
+            "integration": "minecraft",
+        })
+
+        cleared = await asyncio.wait_for(self.server.next_upstream(), 1)
+        self.assertFalse(cleared["available"])
+        self.assertIsNone(cleared["payload"])
+        writer.close()
+        await writer.wait_closed()
+
     async def test_malformed_client_isolated_from_next_connection(self) -> None:
         reader, writer = await self.connect()
         writer.write(b"not json\n")

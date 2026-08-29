@@ -62,12 +62,12 @@ class CoreHostCollector:
         self._store = store
         self._poll_seconds = poll_seconds
         self._on_update = on_update
-        self._last_power_check = 0.0
+        self._last_power_check: float | None = None
         self._power_flags: tuple[bool | None, bool | None] = (None, None)
 
     def _cached_power_flags(self) -> tuple[bool | None, bool | None]:
         now = time.monotonic()
-        if now - self._last_power_check >= 60:
+        if self._last_power_check is None or now - self._last_power_check >= 60:
             self._power_flags = _pi_power_flags()
             self._last_power_check = now
         return self._power_flags
@@ -110,7 +110,7 @@ class CoreHostCollector:
     async def run(self, stop: asyncio.Event) -> None:
         while not stop.is_set():
             try:
-                self.collect_once()
+                await asyncio.to_thread(self.collect_once)
                 await self._on_update()
             except Exception as error:
                 logger.warning("Core host telemetry temporarily unavailable: %s", error)

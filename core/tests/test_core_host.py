@@ -39,6 +39,17 @@ class CoreHostCollectorTests(unittest.TestCase):
         self.assertTrue(state.throttled)
         self.assertFalse(state.undervoltage)
 
+    @patch("olympus_core.monitoring.core_host.time.monotonic", return_value=5.0)
+    @patch("olympus_core.monitoring.core_host._pi_power_flags", return_value=(False, True))
+    def test_power_flags_are_checked_immediately_after_early_boot(
+        self,
+        power_flags: Mock,
+        _monotonic: Mock,
+    ) -> None:
+        collector = CoreHostCollector(MonitoringStore(), 5, no_update)
+        self.assertEqual(collector._cached_power_flags(), (False, True))
+        power_flags.assert_called_once_with()
+
 
 if __name__ == "__main__":
     unittest.main()

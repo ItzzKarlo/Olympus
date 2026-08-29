@@ -53,6 +53,52 @@ class ProductionConfigValidationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Core configuration is invalid"):
                 load_core_config(config)
 
+    def test_enabled_calendar_requires_all_credentials_and_rejects_empty_quotes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "config.toml"
+            secrets = root / "secrets.env"
+            config.write_text(
+                "[security]\nrequire_agent_auth = true\n[calendar]\nenabled = true\n",
+                encoding="utf-8",
+            )
+            secrets.write_text(
+                "OLYMPUS_GOOGLE_CLIENT_ID=client\n"
+                "OLYMPUS_GOOGLE_CLIENT_SECRET=\"\"\n",
+                encoding="utf-8",
+            )
+            result = self.run_validator(config, secrets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("OLYMPUS_GOOGLE_CLIENT_SECRET", result.stderr)
+        self.assertIn("OLYMPUS_GOOGLE_REFRESH_TOKEN", result.stderr)
+
+    def test_enabled_football_requires_credential_for_selected_provider(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "config.toml"
+            secrets = root / "secrets.env"
+            config.write_text(
+                "[security]\nrequire_agent_auth = true\n"
+                "[football]\nenabled = true\nprovider = \"football-data\"\n",
+                encoding="utf-8",
+            )
+            secrets.write_text("OLYMPUS_FOOTBALL_API_KEY=wrong-provider-key\n", encoding="utf-8")
+            result = self.run_validator(config, secrets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("OLYMPUS_FOOTBALL_DATA_API_KEY", result.stderr)
+        self.assertNotIn("wrong-provider-key", result.stderr)
+
+    def test_systemd_secrets_reject_shell_export_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "config.toml"
+            secrets = root / "secrets.env"
+            config.write_text("[security]\nrequire_agent_auth = true\n", encoding="utf-8")
+            secrets.write_text("export OLYMPUS_SPOTIFY_ENABLED=false\n", encoding="utf-8")
+            result = self.run_validator(config, secrets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unsupported export prefix", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
