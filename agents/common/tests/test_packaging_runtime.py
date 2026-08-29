@@ -125,7 +125,9 @@ class SingleInstanceTests(unittest.TestCase):
             self.assertFalse(second.acquire())
             self.assertTrue(is_instance_running(path))
             first.release()
+            first.release()
             self.assertTrue(second.acquire())
+            second.release()
             second.release()
             self.assertFalse(is_instance_running(path))
 
@@ -201,13 +203,18 @@ class AutostartTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "", "")
 
             manager = AutostartManager(paths, ["/agent", "run", "--background"], runner)
-            manager.install()
-            manager.install()
-            self.assertTrue(paths.autostart_path.exists())
-            manager.uninstall()
-            manager.uninstall()
+            with patch("olympus_agent_common.autostart.os.getuid", return_value=501, create=True):
+                manager.install()
+                manager.install()
+                self.assertTrue(paths.autostart_path.exists())
+                manager.uninstall()
+                manager.uninstall()
             self.assertFalse(paths.autostart_path.exists())
             self.assertEqual(sum(call[:2] == ["launchctl", "bootstrap"] for call in calls), 2)
+            self.assertEqual(
+                [call[2] for call in calls if call[:2] == ["launchctl", "bootstrap"]],
+                ["gui/501", "gui/501"],
+            )
 
 
 class LoggingAndCliTests(unittest.TestCase):
@@ -219,15 +226,21 @@ class LoggingAndCliTests(unittest.TestCase):
 
     def test_background_log_is_rotating_and_redacts_enrollment_tokens(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            log_path = configure_logging(True, Path(directory))
-            logging.getLogger("test").warning("token OLYMPUS-thisIsASecretToken123456")
-            for handler in logging.getLogger().handlers:
-                handler.flush()
-            content = log_path.read_text(encoding="utf-8")
-            self.assertIn("[REDACTED]", content)
-            self.assertNotIn("thisIsASecret", content)
-            handler = logging.getLogger().handlers[0]
-            self.assertEqual(handler.backupCount, 5)
+            root = logging.getLogger()
+            try:
+                log_path = configure_logging(True, Path(directory))
+                logging.getLogger("test").warning("token OLYMPUS-thisIsASecretToken123456")
+                for handler in root.handlers:
+                    handler.flush()
+                content = log_path.read_text(encoding="utf-8")
+                self.assertIn("[REDACTED]", content)
+                self.assertNotIn("thisIsASecret", content)
+                handler = root.handlers[0]
+                self.assertEqual(handler.backupCount, 5)
+            finally:
+                for handler in root.handlers[:]:
+                    root.removeHandler(handler)
+                    handler.close()
 
     def test_foreground_logging_uses_the_console_without_a_log_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

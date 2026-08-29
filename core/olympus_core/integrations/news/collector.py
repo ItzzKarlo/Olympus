@@ -134,12 +134,9 @@ class NewsCollector:
         *,
         schedule_expiry: bool,
     ) -> NewsState:
-        current = self._state.presentation
+        current = state.presentation
         if current is not None and LEVEL_RANK[current.level] >= LEVEL_RANK[cluster.importance.level]:
-            return state.model_copy(update={
-                "active_story": self._state.active_story,
-                "presentation": current,
-            })
+            return state
         seconds = (
             self._settings.presentation.major_scene_seconds
             if cluster.importance.level == NewsImportanceLevel.MAJOR

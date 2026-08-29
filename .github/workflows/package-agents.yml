@@ -29,9 +29,10 @@ jobs:
           cache: pip
       - name: Install Agent and packaging dependencies
         shell: bash
+        working-directory: agents/${{ matrix.source }}
         run: |
-          python -m pip install -r agents/${{ matrix.source }}/requirements.txt
-          python -m pip install -r agents/packaging/requirements.txt
+          python -m pip install -r requirements.txt
+          python -m pip install -r ../packaging/requirements.txt
       - name: Test shared Agent runtime
         working-directory: agents/common
         run: python -m unittest discover -s tests
