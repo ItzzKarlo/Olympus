@@ -5,6 +5,8 @@ After=olympus-core.service systemd-user-sessions.service dbus.socket systemd-log
 Conflicts=getty@tty1.service
 After=getty@tty1.service
 ConditionPathExists=/dev/tty1
+StartLimitIntervalSec=5min
+StartLimitBurst=6
 
 [Service]
 Type=simple

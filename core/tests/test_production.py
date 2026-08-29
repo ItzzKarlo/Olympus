@@ -22,8 +22,8 @@ from olympus_core.release import release_info
 
 class ReleaseInfoTests(unittest.TestCase):
     def test_core_reports_v1_and_reads_packaged_revision(self) -> None:
-        self.assertEqual(app.version, "1.0.0")
-        self.assertEqual(asyncio.run(health())["version"], "1.0.0")
+        self.assertEqual(app.version, "1.0.1")
+        self.assertEqual(asyncio.run(health())["version"], "1.0.1")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "VERSION").write_text("1.0.0\n", encoding="ascii")
@@ -109,7 +109,8 @@ class BackupTests(unittest.TestCase):
                 now=datetime(2026, 8, 23, 8, 9, 10, tzinfo=timezone.utc),
             )
             self.assertEqual(created.name, "core-20260823-080910.db")
-            self.assertEqual(created.stat().st_mode & 0o777, 0o600)
+            if os.name != "nt":
+                self.assertEqual(created.stat().st_mode & 0o777, 0o600)
             self.assertFalse(Path(f"{created}.tmp-wal").exists())
             self.assertFalse(Path(f"{created}.tmp-shm").exists())
             with closing(sqlite3.connect(created)) as connection:

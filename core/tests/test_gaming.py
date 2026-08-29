@@ -109,6 +109,30 @@ class GamingSessionTests(unittest.TestCase):
         self.assertEqual(fallback.gaming.game.id, "minecraft")
         self.assertIsNone(fallback.gaming.minecraft)
 
+    def test_observer_state_never_overrides_foreground_game_detection(self) -> None:
+        registry = AgentRegistry()
+        state_service = StateService(registry)
+        registry.register(hello("win-disagreement"))
+        registry.update("win-disagreement", gaming_telemetry("fortnite", "Fortnite"))
+        agent = registry.get("win-disagreement")
+        agent.integrations["minecraft"] = IntegrationSnapshot(
+            available=True,
+            connected=True,
+            last_seen=datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc),
+            observer=IntegrationObserver(
+                id="minecraft-fabric", name="Minecraft Fabric", version="0.1.0"
+            ),
+            payload={},
+        )
+
+        state = state_service.current()
+        self.assertEqual(state.gaming.game.id, "fortnite")
+        self.assertIsNone(state.gaming.integration)
+        self.assertIsNone(state.gaming.minecraft)
+
+        registry.update("win-disagreement", telemetry("idle"))
+        self.assertIsNone(state_service.current().gaming)
+
 
 if __name__ == "__main__":
     unittest.main()

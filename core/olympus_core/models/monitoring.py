@@ -52,6 +52,12 @@ class CoreHostState(BaseModel):
     observed_at: datetime
     system: SystemTelemetry
     storage: StorageTelemetry
+    load_average_1m: float | None = Field(default=None, ge=0)
+    load_average_5m: float | None = Field(default=None, ge=0)
+    swap_percent: float | None = Field(default=None, ge=0, le=100)
+    cpu_temperature_celsius: float | None = None
+    throttled: bool | None = None
+    undervoltage: bool | None = None
 
 
 class EventSeverity(str, Enum):

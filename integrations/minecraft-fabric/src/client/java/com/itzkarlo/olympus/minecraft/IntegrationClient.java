@@ -47,6 +47,13 @@ final class IntegrationClient implements AutoCloseable {
         offer(envelope);
     }
 
+    void clearState() {
+        latestState.set(null);
+        JsonObject envelope = envelope("clear");
+        envelope.addProperty("integration", "minecraft");
+        offer(envelope);
+    }
+
     void publishEvent(String event, JsonObject payload) {
         JsonObject envelope = envelope("event");
         envelope.addProperty("integration", "minecraft");

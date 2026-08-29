@@ -148,8 +148,36 @@ select {
   display: flex;
   flex-direction: column;
   min-height: 100svh;
-  padding: clamp(1.5rem, 3vw, 3.75rem) clamp(1.4rem, 4.2vw, 5rem);
+  padding: clamp(1.5rem, 3vw, 3.75rem) clamp(1.4rem, 4.2vw, 5rem) clamp(3.4rem, 6vh, 4.8rem);
 }
+
+.hermes-health {
+  position: fixed;
+  z-index: 7;
+  right: clamp(1.4rem, 4.2vw, 5rem);
+  bottom: .7rem;
+  left: clamp(1.4rem, 4.2vw, 5rem);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: clamp(.7rem, 1.5vw, 1.4rem);
+  min-height: 1.65rem;
+  padding: .3rem .65rem;
+  border: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
+  border-radius: .55rem;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--background) 84%, transparent);
+  backdrop-filter: blur(10px);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: clamp(.48rem, .58vw, .62rem);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.hermes-health span { display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap; }
+.hermes-health__name { margin-right: auto; color: var(--text); font-weight: 650; letter-spacing: .15em; }
+.hermes-health__problem { color: var(--warning); }
+.hermes-health--warning { border-color: color-mix(in srgb, var(--warning) 50%, transparent); }
 
 .scene__header {
   display: flex;

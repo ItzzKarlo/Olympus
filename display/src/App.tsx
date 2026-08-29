@@ -3,6 +3,7 @@ import { ConnectionStatus } from "./components/ConnectionStatus";
 import { EventOverlayLayer } from "./components/EventOverlayLayer";
 import { FootballEventLayer } from "./components/FootballEventLayer";
 import { GameplayEventLayer } from "./components/GameplayEventLayer";
+import { HermesHealthBar } from "./components/HermesHealthBar";
 import { ParticleField } from "./components/ParticleField";
 import { useClock } from "./hooks/useClock";
 import { useOlympusState } from "./hooks/useOlympusState";
@@ -72,6 +73,7 @@ export default function App() {
       <GameplayEventLayer events={state.mode === "gaming" ? gameplayEvents : []} />
       <FootballEventLayer events={footballEvents} state={state} />
       <EventOverlayLayer alerts={state.alerts} now={now} recoveries={state.recoveries} />
+      <HermesHealthBar connectionStatus={connectionStatus} state={state} />
       {connectionStatus !== "connected" ? (
         <div className="reconnect-banner" role="status">
           Core unavailable — keeping the last known room state while reconnecting

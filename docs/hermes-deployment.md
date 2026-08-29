@@ -1,9 +1,9 @@
 # Hermes production deployment
 
-This document installs Olympus v1.0 as one respectful workload on the existing
-Hermes host. v1.0 formalizes the successfully accepted physical WALL deployment
-as the production baseline; the earlier v0.14.1 deployment remains its immediate
-pre-baseline predecessor.
+This document installs Olympus 1.0.1 as one respectful workload on the existing
+Hermes host. WALL originally launched and was accepted as 1.0.0; 1.0.1 is the
+first post-WALL stabilization patch. The earlier v0.14.1 deployment remains the
+immediate pre-baseline predecessor.
 
 > **Hermes is shared infrastructure.** The Olympus installer does not remove,
 > stop, replace, or reconfigure Pi-hole, Pterodactyl, Docker, SSH, Wake-on-LAN,
@@ -18,7 +18,7 @@ attached.
 ## Production shape
 
 ```text
-/opt/olympus/releases/1.0.0/   immutable application release
+/opt/olympus/releases/1.0.1/   immutable application release
 /opt/olympus/current           atomic symlink to the active release
 /opt/olympus/current/RELEASE-METADATA.json  immutable build provenance
 /etc/olympus/config.toml       non-secret production configuration
@@ -77,16 +77,16 @@ scripts/hermes/build-release.sh --skip-node-install
 The result is:
 
 ```text
-dist/hermes/olympus-1.0.0-hermes-arm64.tar.gz
-dist/hermes/olympus-1.0.0-hermes-arm64.tar.gz.sha256
+dist/hermes/olympus-1.0.1-hermes-arm64.tar.gz
+dist/hermes/olympus-1.0.1-hermes-arm64.tar.gz.sha256
 ```
 
 Verify the checksum after transferring both files to Hermes, then extract:
 
 ```bash
-sha256sum -c olympus-1.0.0-hermes-arm64.tar.gz.sha256
-tar -xzf olympus-1.0.0-hermes-arm64.tar.gz
-cd olympus-1.0.0
+sha256sum -c olympus-1.0.1-hermes-arm64.tar.gz.sha256
+tar -xzf olympus-1.0.1-hermes-arm64.tar.gz
+cd olympus-1.0.1
 ```
 
 The archive contains portable Python source and static browser assets. The
@@ -314,6 +314,9 @@ The launcher:
 
 Cage supports output hotplug and exits after its final output is removed, so the
 service restart returns to the monitor-wait loop rather than rebooting Hermes.
+The packaged unit uses a ten-second restart delay and limits starts to six in
+five minutes. This recovers ordinary Cage/Chromium exits while preventing a
+persistent configuration error from creating a tight restart storm.
 The browser uses Chromium's documented `--ozone-platform=wayland` selection; see
 the [Chromium Ozone overview](https://chromium.googlesource.com/chromium/src/+/main/docs/ozone_overview.md).
 
@@ -331,6 +334,14 @@ If no monitor is attached, Core and all other Hermes services remain unaffected.
 The accepted WALL baseline runs the kiosk on the attached display; kiosk
 enable/disable remains an independent operator choice for other installations.
 
+The packaged unit is authoritative. During 1.0.1 deployment acceptance, inspect
+`/etc/systemd/system/olympus-kiosk.service.d/` and remove obsolete local overrides
+that set `Restart=no`; otherwise systemd will continue to override the packaged
+recovery policy. After the packaged Cage 0.2.1 launcher is verified, also remove
+the temporary `99-cage-hotfix.conf` drop-in and
+`/usr/local/libexec/olympus-start-kiosk-hotfix.sh`, then run `systemctl
+daemon-reload` and restart only `olympus-kiosk.service`.
+
 ## Diagnostics and logs
 
 The doctor is read-only. It does not install, restart, repair, or modify anything:
@@ -339,8 +350,11 @@ The doctor is read-only. It does not install, restart, repair, or modify anythin
 sudo scripts/hermes/doctor.sh
 ```
 
-It checks only Olympus files/services, local health, timers, browser/compositor
-availability, DRM presence, and disk space. Primary logs remain in journald:
+It validates deployed provenance, config/secrets syntax without printing secret
+values, SQLite health and writability, backup recency, Core and kiosk state,
+conflicting kiosk drop-ins, clock synchronization, gateway/DNS/HTTPS reachability,
+browser/compositor availability, DRM presence, and disk space. Rooted filesystem
+inspection skips live probes. Primary logs remain in journald:
 
 ```bash
 journalctl -u olympus-core

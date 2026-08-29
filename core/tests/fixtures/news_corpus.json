@@ -1,0 +1,12 @@
+[
+  {"id":"tagesschau-routine","source":"tagesschau","headline":"Bundestag berät über Anpassung eines bestehenden Gesetzes","topic":"politics","age_hours":1,"expected":"ambient"},
+  {"id":"easy-language","source":"tagesschau","headline":"tagesschau in Einfacher Sprache: Nachrichten der Woche","topic":"germany","age_hours":30,"expected":"ambient"},
+  {"id":"wrestling-hype","source":"reuters","headline":"SHOCKING breaking wrestling star promises unbelievable showdown","topic":"entertainment","age_hours":0,"expected":"ambient"},
+  {"id":"ordinary-politics","source":"tagesschau","headline":"Koalition diskutiert Änderungen am Haushaltsentwurf","topic":"politics","age_hours":0,"expected":"ambient"},
+  {"id":"commodity","source":"reuters","headline":"Copper prices edge higher after routine inventory report","topic":"economy","age_hours":0,"expected":"ambient"},
+  {"id":"bayern-routine","source":"tagesschau","headline":"FC Bayern gewinnt Bundesliga-Heimspiel am Samstag","topic":"sports","age_hours":0,"expected":"ambient"},
+  {"id":"single-disaster","source":"reuters","headline":"Breaking earthquake prompts emergency evacuation across coastal region","topic":"world","age_hours":0,"expected":"notable"},
+  {"id":"corroborated-disaster","sources":["reuters","tagesschau","bbc"],"headline":"Breaking earthquake prompts emergency evacuation across coastal region","topic":"world","age_hours":0,"expected":"major"},
+  {"id":"stale-disaster","sources":["reuters","tagesschau","bbc"],"headline":"Breaking earthquake prompts emergency evacuation across coastal region","topic":"world","age_hours":30,"expected":"ambient"},
+  {"id":"rapid-development","sources":["reuters","tagesschau"],"headline":"Developing emergency outage closes major rail network across Germany","topic":"transport","age_hours":0,"expected":"important"}
+]

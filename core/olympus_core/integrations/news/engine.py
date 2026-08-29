@@ -22,9 +22,18 @@ STOPWORDS = {
     "a", "an", "and", "as", "at", "be", "by", "for", "from", "in", "is", "of", "on", "or", "the", "to", "with",
     "am", "an", "auf", "aus", "bei", "das", "der", "die", "ein", "eine", "für", "im", "in", "ist", "mit", "und", "von", "zu",
 }
-BREAKING_TERMS = {
-    "breaking", "developing", "emergency", "evacuation", "explosion", "earthquake", "attack", "resigns", "resigned", "outage",
-    "eilmeldung", "notfall", "evakuierung", "explosion", "erdbeben", "angriff", "rücktritt", "zurückgetreten", "ausfall",
+DEVELOPING_TERMS = {
+    "breaking", "developing", "eilmeldung", "liveblog", "liveticker",
+}
+SEVERE_TERMS = {
+    "emergency", "evacuation", "explosion", "earthquake", "attack", "mass casualty",
+    "state of emergency", "terror", "tsunami", "wildfire", "flooding", "landslide",
+    "notfall", "evakuierung", "explosion", "erdbeben", "angriff", "terror", "flut",
+    "hochwasser", "waldbrand", "erdrutsch", "katastrophe",
+}
+SIGNIFICANT_TERMS = {
+    "resigns", "resigned", "outage", "ceasefire", "shutdown", "rücktritt",
+    "zurückgetreten", "ausfall", "waffenruhe",
 }
 
 
@@ -79,42 +88,53 @@ def _importance(
     sources = {article.source.id: article.source for article in articles}
     latest = max((article.published_at or article.observed_at) for article in articles)
     age_hours = max(0.0, (now - latest).total_seconds() / 3_600)
-    recency = 0.24 * max(0.0, 1 - age_hours / 24)
-    source_count = 0.08 * min(4, max(0, len(sources) - 1))
+    freshness = max(0.0, 1 - age_hours / 24)
+    recency = 0.16 * freshness
+    corroboration = 0.12 if len(sources) == 2 else 0.22 if len(sources) >= 3 else 0.0
     average_trust = sum(source.trust for source in sources.values()) / max(1, len(sources))
-    trust = 0.12 * min(1.0, average_trust / 1.5)
-    topic_factor = 0.08 if topic in {
+    trust = 0.10 * min(1.0, average_trust / 1.5)
+    topic_factor = 0.06 if topic in {
         NewsTopic.WORLD, NewsTopic.GERMANY, NewsTopic.LOCAL, NewsTopic.POLITICS,
         NewsTopic.WEATHER, NewsTopic.TRANSPORT,
-    } else 0.06
-    local = 0.12 if topic in {NewsTopic.GERMANY, NewsTopic.LOCAL} or any(
+    } else 0.03
+    local = 0.06 if topic in {NewsTopic.GERMANY, NewsTopic.LOCAL} or any(
         source.region in settings.local_regions for source in sources.values()
     ) else 0.0
     corpus = " ".join(article.headline.casefold() for article in articles)
-    breaking = 0.10 if any(re.search(rf"\b{re.escape(term)}\b", corpus) for term in BREAKING_TERMS) else 0.0
+    developing = 0.04 if len(sources) >= 2 and any(
+        re.search(rf"\b{re.escape(term)}\b", corpus) for term in DEVELOPING_TERMS
+    ) else 0.0
+    severity = 0.22 if any(
+        re.search(rf"\b{re.escape(term)}\b", corpus) for term in SEVERE_TERMS
+    ) else 0.08 if any(
+        re.search(rf"\b{re.escape(term)}\b", corpus) for term in SIGNIFICANT_TERMS
+    ) else 0.0
     span_minutes = (
         max(article.observed_at for article in articles) - min(article.observed_at for article in articles)
     ).total_seconds() / 60
-    velocity = 0.12 if len(sources) >= 3 and span_minutes <= 30 else 0.05 if len(sources) >= 2 and span_minutes <= 30 else 0.0
-    base = 0.10
+    velocity = 0.10 if len(sources) >= 3 and span_minutes <= 30 else 0.05 if len(sources) >= 2 and span_minutes <= 30 else 0.0
+    base = 0.06
     factors = {
         "base": base,
         "recency": recency,
-        "source_count": source_count,
+        "corroboration": corroboration,
         "source_trust": trust,
         "topic": topic_factor,
         "local_relevance": local,
-        "developing_language": breaking,
+        "developing_language": developing,
+        "severity_language": severity,
         "source_velocity": velocity,
     }
     interest = settings.interest_weight(topic.value)
-    raw_score = sum(factors.values()) * interest
+    age_decay = max(0.25, 1 - age_hours / 48)
+    raw_score = sum(factors.values()) * interest * age_decay
     factors["interest_multiplier"] = interest
+    factors["age_decay_multiplier"] = age_decay
     score = min(1.0, max(0.0, raw_score))
     thresholds = settings.presentation
-    if score >= thresholds.major_threshold and len(sources) >= 3 and breaking > 0:
+    if score >= thresholds.major_threshold and len(sources) >= 3 and severity >= 0.22:
         level = NewsImportanceLevel.MAJOR
-    elif score >= thresholds.important_threshold:
+    elif score >= thresholds.important_threshold and len(sources) >= 2 and (severity > 0 or developing > 0):
         level = NewsImportanceLevel.IMPORTANT
     elif score >= thresholds.notable_threshold:
         level = NewsImportanceLevel.NOTABLE
@@ -125,7 +145,11 @@ def _importance(
     normalized = normalize_headline(corpus)
     if topic == NewsTopic.SPORTS and any(value in normalized for value in ("bayern", "fc bayern")):
         level = min(level, NewsImportanceLevel.NOTABLE, key=lambda value: list(NewsImportanceLevel).index(value))
-    if topic == NewsTopic.WEATHER and breaking == 0:
+    if topic == NewsTopic.WEATHER and severity == 0:
+        level = min(level, NewsImportanceLevel.NOTABLE, key=lambda value: list(NewsImportanceLevel).index(value))
+    if age_hours >= 24:
+        level = NewsImportanceLevel.AMBIENT
+    elif age_hours >= 12:
         level = min(level, NewsImportanceLevel.NOTABLE, key=lambda value: list(NewsImportanceLevel).index(value))
     return NewsImportance(
         score=round(score, 3),

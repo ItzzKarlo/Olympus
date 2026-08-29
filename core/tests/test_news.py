@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
 from dataclasses import replace
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -176,8 +177,33 @@ class ClusteringAndImportanceTests(unittest.TestCase):
         ], NOW)
         cluster = state.top_stories[0]
         self.assertEqual(cluster.importance.level, NewsImportanceLevel.MAJOR)
-        self.assertGreaterEqual(cluster.importance.factors["source_count"], 0.16)
+        self.assertGreaterEqual(cluster.importance.factors["corroboration"], 0.22)
         self.assertGreater(cluster.importance.factors["local_relevance"], 0)
+
+    def test_realistic_fixture_corpus_has_wall_appropriate_levels(self) -> None:
+        corpus = json.loads(
+            (Path(__file__).parent / "fixtures" / "news_corpus.json").read_text(encoding="utf-8")
+        )
+        feeds = {feed.id: feed for feed in FEEDS}
+        for fixture in corpus:
+            source_ids = fixture["sources"] if "sources" in fixture else [fixture["source"]]
+            published = NOW - timedelta(hours=fixture["age_hours"])
+            values = [
+                result(
+                    feeds[source_id],
+                    article(
+                        feeds[source_id],
+                        fixture["headline"],
+                        identifier=f"{fixture['id']}:{source_id}",
+                        published_at=published,
+                        topic=NewsTopic(fixture["topic"]),
+                    ),
+                )
+                for source_id in source_ids
+            ]
+            cluster = NewsEngine(replace(SETTINGS, retention_seconds=72 * 3_600)).update(values, NOW).top_stories[0]
+            with self.subTest(fixture=fixture["id"]):
+                self.assertEqual(cluster.importance.level.value, fixture["expected"])
 
     def test_topic_interest_changes_relevance_without_creating_truth_score(self) -> None:
         base = NewsEngine(SETTINGS).update([
@@ -228,7 +254,7 @@ class StubProvider:
 
 class PresentationTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
-        self.now = datetime.now(timezone.utc)
+        self.now = NOW
 
     def current_article(
         self,
@@ -267,20 +293,22 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
             [self.current_result(FEEDS[0], baseline)],
             [self.current_result(feed, item) for feed, item in zip(FEEDS, additions)],
             [NewsFeedResult(feed=feed, observed_at=self.now, not_modified=True) for feed in FEEDS],
+            [NewsFeedResult(feed=feed, observed_at=self.now, not_modified=True) for feed in FEEDS],
         ])
         states, events = [], []
         collector = NewsCollector(settings, provider, states.append, events.append)
 
-        initial = await collector.poll_once()
+        initial = await collector.poll_once(self.now)
         self.assertIsNone(initial.presentation)
-        active = await collector.poll_once()
+        active = await collector.poll_once(self.now + timedelta(seconds=1))
         self.assertIsNotNone(active.presentation)
         self.assertEqual(len(events), 1)
-        repeated = await collector.poll_once()
+        repeated = await collector.poll_once(self.now + timedelta(seconds=1.02))
         self.assertEqual(len(events), 1)
         self.assertIsNotNone(repeated.presentation)
-        await asyncio.sleep(0.08)
-        self.assertIsNone(states[-1].presentation)
+        expired = await collector.poll_once(self.now + timedelta(seconds=1.05))
+        self.assertIsNone(expired.presentation)
+        self.assertIsNone(expired.active_story)
         collector.stop()
 
     async def test_important_to_major_escalation_can_replace_during_cooldown(self) -> None:
@@ -302,10 +330,10 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
         ])
         events = []
         collector = NewsCollector(settings, provider, lambda state: None, events.append)
-        await collector.poll_once()
-        important = await collector.poll_once()
+        await collector.poll_once(self.now)
+        important = await collector.poll_once(self.now + timedelta(seconds=1))
         self.assertEqual(important.presentation.level, NewsImportanceLevel.IMPORTANT)
-        major = await collector.poll_once()
+        major = await collector.poll_once(self.now + timedelta(seconds=2))
         self.assertEqual(major.presentation.level, NewsImportanceLevel.MAJOR)
         self.assertEqual([event.type for event in events], ["news.story.important", "news.story.major"])
         collector.stop()
@@ -338,9 +366,10 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
                 lambda state: None,
                 lambda event: None,
                 memory,
+                initial_now=self.now,
             )
-            await first.poll_once()
-            presented = await first.poll_once()
+            await first.poll_once(self.now)
+            presented = await first.poll_once(self.now + timedelta(seconds=1))
             self.assertEqual(presented.presentation.level, NewsImportanceLevel.IMPORTANT)
             first.stop()
 
@@ -354,11 +383,12 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
                 lambda state: None,
                 lambda event: None,
                 memory,
+                initial_now=self.now + timedelta(seconds=2),
             )
-            await restarted.poll_once()
-            repeated = await restarted.poll_once()
+            await restarted.poll_once(self.now + timedelta(seconds=2))
+            repeated = await restarted.poll_once(self.now + timedelta(seconds=3))
             self.assertIsNone(repeated.presentation)
-            escalated = await restarted.poll_once()
+            escalated = await restarted.poll_once(self.now + timedelta(seconds=4))
             self.assertEqual(escalated.presentation.level, NewsImportanceLevel.MAJOR)
             restarted.stop()
 

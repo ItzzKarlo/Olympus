@@ -208,6 +208,22 @@ class LocalIntegrationServer:
                             "observed_at": observed_at,
                             "payload": payload,
                         })
+                elif message_type == "clear":
+                    changed = record.payload is not None
+                    record.payload = None
+                    if changed:
+                        self._queue({
+                            "type": "integration_state",
+                            "integration": integration,
+                            "available": False,
+                            "observer": {
+                                "id": observer_id,
+                                "name": observer_name,
+                                "version": observer_version,
+                            },
+                            "observed_at": observed_at,
+                            "payload": None,
+                        })
                 elif message_type == "event":
                     event, payload = adapter.event(message.get("event"), message.get("payload", {}))
                     self._queue({

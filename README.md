@@ -300,6 +300,13 @@ Use `OLYMPUS_CONFIG=/absolute/path/to/config.toml` to select another file.
 Monitoring operations have fixed timeouts and run independently so one slow
 service cannot block host, network, agent, or Spotify updates.
 
+Core also normalizes a small shared-host health model for Hermes: CPU/RAM/swap,
+load average, disk, uptime, CPU temperature when the platform exposes it, and
+Raspberry Pi throttling/undervoltage flags when `vcgencmd` is available. The
+Display renders this with network, Agent, and selected service state in a quiet
+persistent bottom strip. Missing metrics remain absent. Olympus does not label
+PMIC/firmware signals as total wall power and does not invent current or wattage.
+
 Failures and recoveries are debounced. A single lost request does not produce an
 incident; repeated failures create one persistent active alert, and repeated
 successes resolve it. A reconnecting Display immediately receives current active
@@ -1103,15 +1110,20 @@ onward to Core.
 
 The project targets Java 21 and keeps all Minecraft/Fabric versions in
 `integrations/minecraft-fabric/gradle.properties`, independent of Olympus Core.
-With Gradle 9.5 or newer available:
+No global Gradle installation is required. Install a Java 21 JDK, then use the
+committed, checksum-pinned wrapper:
 
 ```bash
 cd integrations/minecraft-fabric
-gradle build
+./gradlew build
 ```
 
-Copy `build/libs/olympus-minecraft-0.1.0.jar` into the Minecraft client's
-`mods` directory alongside the matching Fabric Loader and Fabric API. It is a
+On Windows, run `gradlew.bat build` from the same directory.
+
+Copy the distributable `build/libs/olympus-minecraft-0.1.0.jar` into the
+Minecraft client's `mods` directory alongside the matching Fabric Loader and
+Fabric API. Do not install `olympus-minecraft-0.1.0-sources.jar`; that artifact
+is for source inspection and IDE use. The observer is a
 client-only mod; multiplayer servers do not install it. To update Minecraft,
 Loader, Loom, or Fabric API later, change only the pinned values in
 `gradle.properties`, then rebuild and run the tests.
@@ -1170,7 +1182,7 @@ cd ..
 scripts/hermes/build-release.sh --skip-node-install
 
 cd integrations/minecraft-fabric
-gradle build
+./gradlew build
 ```
 
 The root `VERSION` file is the product release source of truth. A deployable

@@ -624,5 +624,4 @@ def load_core_config(path: Path | None = None) -> CoreSettings:
         with config_path.open("rb") as file:
             return parse_core_config(tomllib.load(file))
     except (OSError, tomllib.TOMLDecodeError) as error:
-        logger.warning("Core configuration is invalid; using defaults: %s", error)
-        return CoreSettings()
+        raise ValueError(f"Core configuration is invalid: {config_path}: {error}") from error

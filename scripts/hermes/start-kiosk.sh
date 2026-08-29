@@ -5,6 +5,7 @@ CORE_URL=${OLYMPUS_CORE_URL:-http://127.0.0.1:8000}
 PROFILE=${OLYMPUS_KIOSK_PROFILE:-/home/olympus-display/.config/olympus-chromium}
 DRM_ROOT=${OLYMPUS_DRM_ROOT:-/sys/class/drm}
 WAIT_SECONDS=${OLYMPUS_KIOSK_WAIT_SECONDS:-3}
+MONITOR_WAIT_SECONDS=${OLYMPUS_KIOSK_MONITOR_WAIT_SECONDS:-10}
 MAX_WAIT_ATTEMPTS=${OLYMPUS_KIOSK_MAX_WAIT_ATTEMPTS:-0}
 CURL=${CURL_BIN:-curl}
 CAGE=${CAGE_BIN:-}
@@ -42,7 +43,7 @@ fi
 
 echo "Olympus kiosk waiting for an attached DRM display."
 while ! monitor_connected; do
-    sleep 10
+    sleep "$MONITOR_WAIT_SECONDS"
 done
 
 echo "Olympus kiosk waiting for local Core at $CORE_URL/health."

@@ -130,7 +130,7 @@ class HermesScriptTests(unittest.TestCase):
 
     def test_product_and_component_version_declarations_are_synchronized(self) -> None:
         version = (ROOT / "VERSION").read_text(encoding="ascii").strip()
-        self.assertEqual(version, "1.0.0")
+        self.assertEqual(version, "1.0.1")
         self.assertEqual(json.loads((ROOT / "display" / "package.json").read_text())["version"], version)
         common_package = tomllib.loads(
             (ROOT / "agents" / "common" / "pyproject.toml").read_text(encoding="utf-8")
@@ -157,6 +157,8 @@ class HermesScriptTests(unittest.TestCase):
         self.assertIn('$ROOT/VERSION', builder)
         self.assertIn('RELEASE-METADATA.json', builder)
         self.assertNotIn('agents/common', builder)
+        self.assertIn('COPYFILE_DISABLE=1', builder)
+        self.assertIn("-name '._*'", builder)
 
     def test_kiosk_command_is_cage_021_compatible_and_keeps_chromium_arguments(self) -> None:
         environment = {
@@ -279,6 +281,55 @@ printf '%s\n' "$@" > "$CAGE_ARGUMENTS"
             )
             self.assertEqual(bounded.returncode, 75)
             self.assertIn("wait limit reached", bounded.stderr)
+
+    def test_kiosk_waits_for_monitor_and_core_then_starts_cleanly(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            connector = root / "drm" / "card0-HDMI-A-1"
+            connector.mkdir(parents=True)
+            status = connector / "status"
+            status.write_text("disconnected\n", encoding="ascii")
+            curl = root / "curl"
+            attempts = root / "curl-attempts"
+            curl.write_text(
+                "#!/bin/sh\n"
+                "count=0\n"
+                "[ ! -f \"$CURL_ATTEMPTS\" ] || count=$(cat \"$CURL_ATTEMPTS\")\n"
+                "count=$((count + 1))\n"
+                "printf '%s\\n' \"$count\" > \"$CURL_ATTEMPTS\"\n"
+                "[ \"$count\" -ge 2 ]\n",
+                encoding="ascii",
+            )
+            curl.chmod(0o755)
+            cage = root / "cage"
+            started = root / "started"
+            cage.write_text("#!/bin/sh\ntouch \"$KIOSK_STARTED\"\n", encoding="ascii")
+            cage.chmod(0o755)
+            process = subprocess.Popen(
+                [HERMES_SCRIPTS / "start-kiosk.sh"],
+                env={
+                    **os.environ,
+                    "CAGE_BIN": str(cage),
+                    "BROWSER_BIN": "/usr/bin/chromium",
+                    "CURL_BIN": str(curl),
+                    "CURL_ATTEMPTS": str(attempts),
+                    "KIOSK_STARTED": str(started),
+                    "OLYMPUS_DRM_ROOT": str(root / "drm"),
+                    "OLYMPUS_KIOSK_PROFILE": str(root / "profile"),
+                    "OLYMPUS_KIOSK_MONITOR_WAIT_SECONDS": "0.01",
+                    "OLYMPUS_KIOSK_WAIT_SECONDS": "0.01",
+                    "OLYMPUS_KIOSK_MAX_WAIT_ATTEMPTS": "3",
+                    "XDG_RUNTIME_DIR": str(root / "runtime"),
+                },
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            status.write_text("connected\n", encoding="ascii")
+            stdout, stderr = process.communicate(timeout=5)
+            self.assertEqual(process.returncode, 0, stdout + stderr)
+            self.assertEqual(attempts.read_text(encoding="ascii").strip(), "2")
+            self.assertTrue(started.exists())
 
     def test_installer_dry_run_resolves_versioned_paths_without_writing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -553,21 +604,36 @@ printf '%s\n' "$@" > "$CAGE_ARGUMENTS"
             root = Path(directory)
             required = (
                 "etc/olympus/config.toml",
+                "etc/olympus/secrets.env",
                 "var/lib/olympus/core.db",
                 "opt/olympus/current/display/index.html",
+                "opt/olympus/current/VERSION",
                 "opt/olympus/current/RELEASE-METADATA.json",
                 "etc/systemd/system/olympus-core.service",
+                "etc/systemd/system/olympus-kiosk.service",
                 "etc/systemd/system/olympus-backup.timer",
                 "etc/systemd/system/olympus-healthcheck.timer",
             )
             for relative in required:
                 path = root / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
-                content = json.dumps({
-                    "revision": REVISION,
-                    "source_tree": "clean",
-                    "version": "1.0.0",
-                }, indent=2, sort_keys=True) if path.name == "RELEASE-METADATA.json" else "test"
+                if path.name == "RELEASE-METADATA.json":
+                    content = json.dumps({
+                        "revision": REVISION,
+                        "source_tree": "clean",
+                        "version": "1.0.0",
+                    }, indent=2, sort_keys=True)
+                elif path.name == "VERSION":
+                    content = "1.0.0\n"
+                elif path.name == "config.toml":
+                    content = "[security]\nrequire_agent_auth = true\n"
+                elif path.name == "secrets.env":
+                    content = "OLYMPUS_SPOTIFY_ENABLED=false\n"
+                elif path.name == "core.db":
+                    sqlite3.connect(path).close()
+                    continue
+                else:
+                    content = "test"
                 path.write_text(content, encoding="utf-8")
             before = sorted(str(path.relative_to(root)) for path in root.rglob("*"))
             result = subprocess.run(
@@ -692,6 +758,9 @@ class SystemdTemplateTests(unittest.TestCase):
         unit = (UNITS / "olympus-kiosk.service").read_text(encoding="utf-8")
         self.assertIn("User=olympus-display", unit)
         self.assertIn("Restart=always", unit)
+        self.assertIn("RestartSec=10s", unit)
+        self.assertIn("StartLimitIntervalSec=5min", unit)
+        self.assertIn("StartLimitBurst=6", unit)
         self.assertIn("CPUWeight=50", unit)
         self.assertIn("OOMScoreAdjust=200", unit)
         self.assertNotIn("Requires=olympus-core", unit)

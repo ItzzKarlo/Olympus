@@ -1,6 +1,7 @@
 import asyncio
 import json
 from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -47,6 +48,7 @@ async def send(writer: asyncio.StreamWriter, message: object) -> None:
 
 class LocalIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
+        self.directory = tempfile.TemporaryDirectory()
         self.now = [100.0]
         self.server = LocalIntegrationServer(
             port=0,
@@ -57,6 +59,7 @@ class LocalIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self) -> None:
         await self.server.stop()
+        self.directory.cleanup()
 
     async def connect(self) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         return await asyncio.open_connection("127.0.0.1", self.server.bound_port)
@@ -121,6 +124,31 @@ class LocalIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.server.snapshot()["minecraft"]["available"])
         self.assertIsNone(self.server.snapshot()["minecraft"]["payload"])
 
+    async def test_world_exit_clears_state_immediately(self) -> None:
+        reader, writer = await self.connect()
+        await send(writer, HELLO)
+        await reader.readline()
+        await send(writer, {
+            "protocol": 1,
+            "type": "state",
+            "integration": "minecraft",
+            "payload": MINECRAFT_STATE,
+        })
+        await self.server.next_upstream()
+        await send(writer, {
+            "protocol": 1,
+            "type": "clear",
+            "integration": "minecraft",
+        })
+        cleared = await asyncio.wait_for(self.server.next_upstream(), 1)
+        self.assertEqual(cleared["type"], "integration_state")
+        self.assertFalse(cleared["available"])
+        self.assertIsNone(cleared["payload"])
+        self.assertTrue(self.server.snapshot()["minecraft"]["connected"])
+        self.assertFalse(self.server.snapshot()["minecraft"]["available"])
+        writer.close()
+        await writer.wait_closed()
+
     async def test_malformed_client_isolated_from_next_connection(self) -> None:
         reader, writer = await self.connect()
         writer.write(b"not json\n")
@@ -151,7 +179,8 @@ class LocalIntegrationTests(unittest.IsolatedAsyncioTestCase):
             core_ws_url="ws://core.invalid/ws/agents",
             telemetry_interval=0.01,
             reconnect_delay=0.01,
-            identity_path=Path("/tmp/unused-olympus-test-identity"),
+            identity_path=Path(self.directory.name) / "agent-id",
+            key_path=Path(self.directory.name) / "agent-key.pem",
         )
 
         def collect() -> dict[str, object]:

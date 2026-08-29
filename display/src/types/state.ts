@@ -109,6 +109,12 @@ export interface CoreHostState {
   observed_at: string;
   system: SystemTelemetry;
   storage: StorageTelemetry;
+  load_average_1m: number | null;
+  load_average_5m: number | null;
+  swap_percent: number | null;
+  cpu_temperature_celsius: number | null;
+  throttled: boolean | null;
+  undervoltage: boolean | null;
 }
 
 export type EventSeverity = "info" | "warning" | "critical";

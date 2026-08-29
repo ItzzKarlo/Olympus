@@ -9,6 +9,15 @@ INSTALL_KIOSK_PACKAGES=0
 ENABLE_KIOSK=0
 NO_START=0
 DRY_RUN=0
+PARTIAL_TARGET=
+
+cleanup_partial_release() {
+    if [ -n "$PARTIAL_TARGET" ] && [ -d "$PARTIAL_TARGET" ]; then
+        rm -rf -- "$PARTIAL_TARGET"
+    fi
+}
+trap cleanup_partial_release EXIT
+trap 'exit 130' INT TERM
 
 usage() {
     cat <<'EOF'
@@ -156,20 +165,26 @@ if [ "$TARGET_EXISTS" -eq 0 ]; then
         exit 1
     fi
 
-    install -d -o root -g olympus -m 0755 "$TARGET"
-    if [ "$RELEASE_DIR" != "$TARGET" ]; then
-        cp -a "$RELEASE_DIR/." "$TARGET/"
+    PARTIAL_TARGET="${TARGET}.installing.$$"
+    if [ -e "$PARTIAL_TARGET" ] || [ -L "$PARTIAL_TARGET" ]; then
+        echo "Partial release staging path already exists: $PARTIAL_TARGET" >&2
+        exit 1
     fi
-    python3 -m venv "$TARGET/core/.venv"
-    "$TARGET/core/.venv/bin/python" -m pip install -r "$TARGET/core/requirements.txt"
-    chown -R root:root "$TARGET"
-    find "$TARGET/scripts" -type f -name '*.sh' -exec chmod 0755 {} +
+    install -d -o root -g olympus -m 0755 "$PARTIAL_TARGET"
+    cp -a "$RELEASE_DIR/." "$PARTIAL_TARGET/"
+    python3 -m venv "$PARTIAL_TARGET/core/.venv"
+    "$PARTIAL_TARGET/core/.venv/bin/python" -m pip install -r "$PARTIAL_TARGET/core/requirements.txt"
+    chown -R root:root "$PARTIAL_TARGET"
+    find "$PARTIAL_TARGET/scripts" -type f -name '*.sh' -exec chmod 0755 {} +
+    if [ -e "$TARGET" ] || [ -L "$TARGET" ]; then
+        echo "Release target appeared during installation; refusing to replace it: $TARGET" >&2
+        exit 1
+    fi
+    mv "$PARTIAL_TARGET" "$TARGET"
+    PARTIAL_TARGET=
 else
     echo "Release $VERSION already exists with identical provenance; reusing it unchanged."
 fi
-
-ln -sfn "releases/$VERSION" /opt/olympus/current.next
-mv -Tf /opt/olympus/current.next /opt/olympus/current
 
 for unit in "$TARGET"/deploy/systemd/*; do
     install -o root -g root -m 0644 "$unit" "/etc/systemd/system/$(basename "$unit")"
@@ -177,6 +192,9 @@ done
 install -o root -g root -m 0644 "$TARGET/deploy/pam/olympus-kiosk" /etc/pam.d/olympus-kiosk
 systemctl daemon-reload
 systemctl enable olympus-core.service olympus-backup.timer olympus-healthcheck.timer
+
+ln -sfn "releases/$VERSION" /opt/olympus/current.next
+mv -Tf /opt/olympus/current.next /opt/olympus/current
 
 if [ "$NO_START" -eq 0 ]; then
     systemctl restart olympus-core.service

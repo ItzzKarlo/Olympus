@@ -5,6 +5,12 @@ ROOT=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 VERSION=$(tr -d '[:space:]' < "$ROOT/VERSION")
 SKIP_NODE_INSTALL=0
 ALLOW_DIRTY=0
+PYTHON_BIN=${PYTHON_BIN:-python3}
+
+# Suppress macOS AppleDouble/xattr metadata. Release provenance is stored in
+# RELEASE-METADATA.json; the application payload contains portable plain files.
+COPYFILE_DISABLE=1
+export COPYFILE_DISABLE
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -27,7 +33,7 @@ METADATA_ARGS=
 if [ "$ALLOW_DIRTY" -eq 1 ]; then
     METADATA_ARGS=--allow-dirty
 fi
-python3 "$ROOT/scripts/hermes/release_metadata.py" write \
+"$PYTHON_BIN" "$ROOT/scripts/hermes/release_metadata.py" write \
     --root "$ROOT" \
     --output "$RELEASE/RELEASE-METADATA.json" \
     $METADATA_ARGS
@@ -42,7 +48,7 @@ cp -R "$ROOT/scripts/hermes" "$RELEASE/scripts/"
 cp "$ROOT/docs/hermes-deployment.md" "$RELEASE/README-HERMES.md"
 cp "$ROOT/VERSION" "$RELEASE/VERSION"
 find "$RELEASE" -type d -name __pycache__ -prune -exec rm -rf {} +
-find "$RELEASE" -type f \( -name '*.pyc' -o -name '.DS_Store' \) -delete
+find "$RELEASE" -type f \( -name '*.pyc' -o -name '.DS_Store' -o -name '._*' \) -delete
 
 OUTPUT="$ROOT/dist/hermes"
 mkdir -p "$OUTPUT"

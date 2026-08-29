@@ -48,6 +48,9 @@ public final class OlympusMinecraftClient implements ClientModInitializer {
             integration.publishEvent(event.type(), event.payload());
         }
         if (!inSession) {
+            if (previousState != null) {
+                integration.clearState();
+            }
             previousState = null;
             return;
         }

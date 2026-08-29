@@ -44,6 +44,7 @@ class NewsCollector:
         on_event: Callable[[NewsDisplayEvent], Awaitable[None] | None],
         memory: NewsMemoryRepository | None = None,
         memory_retention_days: int = 7,
+        initial_now: datetime | None = None,
     ) -> None:
         self._settings = settings
         self._provider = provider
@@ -58,7 +59,7 @@ class NewsCollector:
         if memory is not None:
             self._presented = {
                 fingerprint: (NewsImportanceLevel(item.highest_level), item.last_presented_at)
-                for fingerprint, item in memory.load(memory_retention_days).items()
+                for fingerprint, item in memory.load(memory_retention_days, now=initial_now).items()
             }
         self._expiry_task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
@@ -112,13 +113,12 @@ class NewsCollector:
             default=None,
         )
 
-    async def _expire_after(self, ends_at: datetime) -> None:
-        delay = max(0.0, (ends_at - datetime.now(timezone.utc)).total_seconds())
+    async def _expire_after(self, story_id: str, seconds: float) -> None:
         try:
-            await asyncio.sleep(delay)
+            await asyncio.sleep(seconds)
             async with self._lock:
                 presentation = self._state.presentation
-                if presentation is not None and presentation.ends_at <= datetime.now(timezone.utc):
+                if presentation is not None and presentation.story_id == story_id:
                     await self._publish(self._state.model_copy(update={
                         "active_story": None,
                         "presentation": None,
@@ -126,7 +126,14 @@ class NewsCollector:
         except asyncio.CancelledError:
             return
 
-    async def _present(self, cluster: NewsCluster, now: datetime, state: NewsState) -> NewsState:
+    async def _present(
+        self,
+        cluster: NewsCluster,
+        now: datetime,
+        state: NewsState,
+        *,
+        schedule_expiry: bool,
+    ) -> NewsState:
         current = self._state.presentation
         if current is not None and LEVEL_RANK[current.level] >= LEVEL_RANK[cluster.importance.level]:
             return state.model_copy(update={
@@ -151,12 +158,16 @@ class NewsCollector:
                 self._memory.record(fingerprint, cluster.importance.level.value, now)
             except Exception as error:
                 logger.warning("Could not persist News presentation memory: %s", error)
-        if self._expiry_task is not None:
-            self._expiry_task.cancel()
-        self._expiry_task = asyncio.create_task(self._expire_after(presentation.ends_at))
+        if schedule_expiry:
+            if self._expiry_task is not None:
+                self._expiry_task.cancel()
+            self._expiry_task = asyncio.create_task(
+                self._expire_after(presentation.story_id, seconds)
+            )
         return state.model_copy(update={"active_story": cluster, "presentation": presentation})
 
     async def poll_once(self, now: datetime | None = None) -> NewsState:
+        schedule_expiry = now is None
         current = now or datetime.now(timezone.utc)
         results = await self._provider.fetch()
         async with self._lock:
@@ -173,7 +184,12 @@ class NewsCollector:
                     "presentation": self._state.presentation,
                 })
             if candidate is not None:
-                state = await self._present(candidate, current, state)
+                state = await self._present(
+                    candidate,
+                    current,
+                    state,
+                    schedule_expiry=schedule_expiry,
+                )
             await self._publish(state)
             for cluster in escalations:
                 await self._notify(cluster, current)
