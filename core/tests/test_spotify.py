@@ -1,4 +1,7 @@
+import asyncio
+from dataclasses import replace
 import unittest
+from unittest.mock import patch
 
 import httpx
 
@@ -13,6 +16,7 @@ SETTINGS = SpotifySettings(
     client_secret="secret",
     refresh_token="refresh",
     poll_seconds=5,
+    active_poll_seconds=1.5,
     stale_seconds=25,
 )
 
@@ -121,6 +125,80 @@ class SpotifyApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.progress_ms, 33_000)
         self.assertEqual(state.track.title, "Paused")
 
+    async def test_queue_excludes_current_and_deduplicates_stable_ids_in_order(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.host == "accounts.spotify.com":
+                return httpx.Response(200, json={"access_token": "token"})
+            if request.url.path == "/v1/me/player":
+                return httpx.Response(200, json={
+                    "is_playing": True,
+                    "item": track("current", "Repeat"),
+                    "context": None,
+                })
+            if request.url.path == "/v1/me/player/queue":
+                return httpx.Response(200, json={"queue": [
+                    track("current", "Repeat"),
+                    track("next-1", "Same title"),
+                    track("next-1", "Same title"),
+                    track("next-2", "Same title"),
+                    track("next-3", "Finale"),
+                ]})
+            raise AssertionError(f"Unexpected request: {request.url}")
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        state = await SpotifyApi(SETTINGS, client).fetch_state()
+        await client.aclose()
+
+        self.assertEqual([item.id for item in state.queue], ["next-1", "next-2", "next-3"])
+        self.assertEqual([item.title for item in state.queue[:2]], ["Same title", "Same title"])
+
+    async def test_queue_missing_id_fallback_uses_full_track_metadata(self) -> None:
+        current = track("placeholder", "Repeat")
+        current.pop("id")
+        current["uri"] = "spotify:track:repeat-uri"
+        repeated = dict(current)
+        different_recording = track("placeholder", "Repeat")
+        different_recording.pop("id")
+        different_recording["artists"] = [{"name": "Different artist"}]
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.host == "accounts.spotify.com":
+                return httpx.Response(200, json={"access_token": "token"})
+            if request.url.path == "/v1/me/player":
+                return httpx.Response(200, json={
+                    "is_playing": True,
+                    "item": current,
+                    "context": None,
+                })
+            if request.url.path == "/v1/me/player/queue":
+                return httpx.Response(200, json={"queue": [
+                    repeated,
+                    repeated,
+                    different_recording,
+                    track("unique", "After repeat"),
+                ]})
+            raise AssertionError(f"Unexpected request: {request.url}")
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        state = await SpotifyApi(SETTINGS, client).fetch_state()
+        await client.aclose()
+
+        self.assertEqual(
+            [(item.id, item.title, item.artists) for item in state.queue],
+            [
+                (None, "Repeat", ["Different artist"]),
+                ("unique", "After repeat", ["The Olympians"]),
+            ],
+        )
+
+
+class SpotifySettingsTests(unittest.TestCase):
+    def test_active_poll_default_targets_near_real_time_without_changing_inactive_poll(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            settings = SpotifySettings.from_environment()
+        self.assertEqual(settings.active_poll_seconds, 1.5)
+        self.assertEqual(settings.poll_seconds, 5.0)
+
 
 class FakeGateway:
     def __init__(self, outcomes: list[MediaState | Exception]) -> None:
@@ -153,12 +231,55 @@ class SpotifyCollectorTests(unittest.IsolatedAsyncioTestCase):
             update,
         )
         self.assertIs(await collector.poll_once(now=100), playing)
-        self.assertIs(await collector.poll_once(now=110), playing)
+        self.assertEqual(collector.poll_interval(playing), 1.5)
+        retained = await collector.poll_once(now=110)
+        self.assertIs(retained, playing)
+        self.assertEqual(collector.poll_interval(retained), 5)
         expired = await collector.poll_once(now=130)
 
         self.assertEqual(updates, [playing, expired])
         self.assertFalse(expired.available)
         self.assertFalse(expired.is_playing)
+        self.assertEqual(collector.poll_interval(expired), 10)
+
+    async def test_run_never_overlaps_gateway_polls(self) -> None:
+        class TrackingGateway:
+            def __init__(self) -> None:
+                self.active = 0
+                self.max_active = 0
+
+            async def fetch_state(self) -> MediaState:
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+                await asyncio.sleep(0.01)
+                self.active -= 1
+                return MediaState(
+                    is_playing=True,
+                    track=MediaTrack(title="Live", duration_ms=120_000),
+                )
+
+            async def aclose(self) -> None:
+                return None
+
+        gateway = TrackingGateway()
+        updates = 0
+        collector: SpotifyCollector
+
+        async def update(_state: MediaState) -> None:
+            nonlocal updates
+            updates += 1
+            if updates == 3:
+                collector.stop()
+
+        collector = SpotifyCollector(
+            replace(SETTINGS, poll_seconds=0.01, active_poll_seconds=0.01),
+            gateway,
+            update,
+        )
+        await asyncio.wait_for(collector.run(), timeout=1)
+
+        self.assertEqual(updates, 3)
+        self.assertEqual(gateway.max_active, 1)
 
 
 if __name__ == "__main__":

@@ -316,8 +316,8 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
             SETTINGS.presentation,
             important_threshold=0.65,
             major_threshold=0.80,
-            news_scene_seconds=30,
-            major_scene_seconds=30,
+            news_scene_seconds=300,
+            major_scene_seconds=900,
         ))
         title = "Emergency rail network disruption affects southern Germany today"
         one = self.current_article(FEEDS[0], title, identifier="one", topic=NewsTopic.TRANSPORT)
@@ -333,8 +333,16 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
         await collector.poll_once(self.now)
         important = await collector.poll_once(self.now + timedelta(seconds=1))
         self.assertEqual(important.presentation.level, NewsImportanceLevel.IMPORTANT)
+        self.assertEqual(
+            (important.presentation.ends_at - important.presentation.started_at).total_seconds(),
+            30,
+        )
         major = await collector.poll_once(self.now + timedelta(seconds=2))
         self.assertEqual(major.presentation.level, NewsImportanceLevel.MAJOR)
+        self.assertEqual(
+            (major.presentation.ends_at - major.presentation.started_at).total_seconds(),
+            30,
+        )
         self.assertEqual([event.type for event in events], ["news.story.important", "news.story.major"])
         collector.stop()
 
@@ -443,7 +451,12 @@ class NewsConfigTests(unittest.TestCase):
                 "language": "de", "region": "de", "trust": 1.2, "topic": "germany",
             }],
             "interests": {"technology": 1.15},
-            "presentation": {"ambient_limit": 2, "major_threshold": 0.9},
+            "presentation": {
+                "ambient_limit": 2,
+                "news_scene_seconds": 300,
+                "major_scene_seconds": 900,
+                "major_threshold": 0.9,
+            },
         }}).news
         self.assertTrue(settings.configured)
         self.assertEqual(settings.poll_seconds, 420)
@@ -452,6 +465,8 @@ class NewsConfigTests(unittest.TestCase):
         self.assertEqual(settings.feeds[0].region, "DE")
         self.assertEqual(settings.interest_weight("technology"), 1.15)
         self.assertEqual(settings.presentation.ambient_limit, 2)
+        self.assertEqual(settings.presentation.news_scene_seconds, 30)
+        self.assertEqual(settings.presentation.major_scene_seconds, 30)
         self.assertEqual(settings.presentation.major_threshold, 0.9)
 
 

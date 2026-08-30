@@ -4,6 +4,7 @@ import tempfile
 import unittest
 
 from olympus_core.agents.registry import AgentRegistry
+from olympus_core.config import parse_core_config
 from olympus_core.models.monitoring import EventSeverity
 from olympus_core.persistence.database import Database
 from olympus_core.persistence.incidents import IncidentRepository
@@ -12,7 +13,15 @@ from olympus_core.services.state import StateService
 
 
 class EventServiceTests(unittest.IsolatedAsyncioTestCase):
-    async def test_incident_is_deduplicated_and_exposed_in_display_state(self) -> None:
+    def test_alert_interruption_gate_defaults_off_and_can_be_reenabled(self) -> None:
+        self.assertFalse(
+            parse_core_config({}).presentation.alert_interruptions_enabled
+        )
+        self.assertTrue(parse_core_config({
+            "presentation": {"alert_interruptions_enabled": True}
+        }).presentation.alert_interruptions_enabled)
+
+    async def test_incident_is_deduplicated_but_interruptions_default_off(self) -> None:
         events = EventService()
         started = datetime(2026, 8, 22, 17, 0, tzinfo=timezone.utc)
         first = await events.raise_incident(
@@ -36,8 +45,14 @@ class EventServiceTests(unittest.IsolatedAsyncioTestCase):
 
         state = StateService(AgentRegistry(), events=events).display_state()
         self.assertEqual(first.id, duplicate.id)
-        self.assertEqual(len(state.alerts), 1)
-        self.assertEqual(state.alerts[0].title, "NAS is down")
+        self.assertEqual(len(events.active_alerts()), 1)
+        self.assertEqual(state.alerts, [])
+        enabled = StateService(
+            AgentRegistry(),
+            events=events,
+            alert_interruptions_enabled=True,
+        ).display_state()
+        self.assertEqual(enabled.alerts[0].title, "NAS is down")
 
     async def test_recovery_resolves_alert_and_calculates_downtime(self) -> None:
         events = EventService(recovery_seconds=6)

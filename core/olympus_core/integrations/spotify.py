@@ -72,7 +72,7 @@ def normalize_track(value: Any) -> MediaTrack | None:
         else None
     )
     return MediaTrack(
-        id=_text(track.get("id")),
+        id=_text(track.get("id")) or _text(track.get("uri")),
         title=title,
         artists=artists,
         duration_ms=_integer(track.get("duration_ms")),
@@ -91,6 +91,39 @@ def normalize_queue_track(value: Any) -> MediaQueueTrack | None:
         artists=[artist.name for artist in normalized.artists],
         duration_ms=normalized.duration_ms,
         artwork_url=normalized.album.artwork_url if normalized.album else None,
+    )
+
+
+def _fallback_track_identity(
+    title: str,
+    artists: list[str],
+    duration_ms: int,
+) -> tuple[str, str, tuple[str, ...], int]:
+    return (
+        "metadata",
+        title.strip().casefold(),
+        tuple(artist.strip().casefold() for artist in artists),
+        duration_ms,
+    )
+
+
+def _current_track_identity(track: MediaTrack) -> tuple[object, ...]:
+    if track.id:
+        return ("spotify", track.id)
+    return _fallback_track_identity(
+        track.title,
+        [artist.name for artist in track.artists],
+        track.duration_ms,
+    )
+
+
+def _queue_track_identity(track: MediaQueueTrack) -> tuple[object, ...]:
+    if track.id:
+        return ("spotify", track.id)
+    return _fallback_track_identity(
+        track.title,
+        track.artists,
+        track.duration_ms,
     )
 
 
@@ -225,12 +258,18 @@ class SpotifyApi:
         queue: list[MediaQueueTrack] = []
         if track is not None:
             queue_payload = await self._request("/me/player/queue")
+            seen = {_current_track_identity(track)}
             for item in _list(_object(queue_payload).get("queue")):
+                normalized = normalize_queue_track(item)
+                if normalized is None:
+                    continue
+                identity = _queue_track_identity(normalized)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                queue.append(normalized)
                 if len(queue) == 3:
                     break
-                normalized = normalize_queue_track(item)
-                if normalized is not None:
-                    queue.append(normalized)
 
         return MediaState(
             is_playing=bool(playback.get("is_playing")),
@@ -257,12 +296,14 @@ class SpotifyCollector:
         self._last_success_at: float | None = None
         self._was_playing = False
         self._last_error_log_at = 0.0
+        self._consecutive_failures = 0
 
     async def poll_once(self, now: float | None = None) -> MediaState:
         current_time = time.monotonic() if now is None else now
         try:
             state = await self._gateway.fetch_state()
         except Exception as exc:
+            self._consecutive_failures += 1
             if current_time - self._last_error_log_at >= 30:
                 logger.warning("Spotify API temporarily unavailable: %s", exc)
                 self._last_error_log_at = current_time
@@ -279,6 +320,7 @@ class SpotifyCollector:
 
         self._last_good_state = state
         self._last_success_at = current_time
+        self._consecutive_failures = 0
         if state.is_playing != self._was_playing:
             logger.info(
                 "Spotify playback became %s",
@@ -288,14 +330,29 @@ class SpotifyCollector:
         await self._on_update(state)
         return state
 
+    def poll_interval(self, state: MediaState) -> float:
+        if self._consecutive_failures:
+            return max(
+                self._settings.poll_seconds,
+                min(
+                    60.0,
+                    self._settings.poll_seconds * (2 ** (self._consecutive_failures - 1)),
+                ),
+            )
+        return (
+            self._settings.active_poll_seconds
+            if state.available and state.is_playing
+            else self._settings.poll_seconds
+        )
+
     async def run(self) -> None:
         logger.info("Spotify collector enabled")
         try:
             while not self._stop.is_set():
-                await self.poll_once()
+                state = await self.poll_once()
                 try:
                     await asyncio.wait_for(
-                        self._stop.wait(), timeout=self._settings.poll_seconds
+                        self._stop.wait(), timeout=self.poll_interval(state)
                     )
                 except TimeoutError:
                     pass

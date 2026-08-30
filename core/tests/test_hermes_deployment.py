@@ -142,7 +142,7 @@ class HermesScriptTests(unittest.TestCase):
 
     def test_product_and_component_version_declarations_are_synchronized(self) -> None:
         version = (ROOT / "VERSION").read_text(encoding="ascii").strip()
-        self.assertEqual(version, "1.0.3")
+        self.assertEqual(version, "1.0.4")
         self.assertEqual(json.loads((ROOT / "display" / "package.json").read_text())["version"], version)
         common_package = tomllib.loads(
             (ROOT / "agents" / "common" / "pyproject.toml").read_text(encoding="utf-8")

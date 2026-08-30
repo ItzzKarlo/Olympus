@@ -72,6 +72,9 @@ state_service = StateService(
     time_policy=time_policy_service,
     football=football_store,
     news=news_store,
+    alert_interruptions_enabled=(
+        core_settings.presentation.alert_interruptions_enabled
+    ),
 )
 display_hub = DisplayHub()
 gameplay_service = GameplayEventService()

@@ -14,6 +14,10 @@ port = 8000
 # Optional Vite production output. When present, Core serves it at the same origin.
 directory = "../display/dist"
 
+[presentation]
+# Monitoring remains active, but service/network incidents do not interrupt WALL.
+alert_interruptions_enabled = false
+
 [persistence]
 # Development default. Hermes may use /var/lib/olympus/core.db later.
 database_path = "~/.local/share/olympus/core.db"
@@ -97,7 +101,7 @@ local_regions = ["DE"]
 [news.presentation]
 ambient_limit = 3
 news_scene_seconds = 20
-major_scene_seconds = 45
+major_scene_seconds = 30
 cooldown_minutes = 30
 notable_threshold = 0.55
 important_threshold = 0.68

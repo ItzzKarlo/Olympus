@@ -33,6 +33,7 @@ class StateService:
         clock: Callable[[], datetime] | None = None,
         football: FootballStateStore | None = None,
         news: NewsStateStore | None = None,
+        alert_interruptions_enabled: bool = False,
     ) -> None:
         self._registry = registry
         self._media = media or MediaStateStore()
@@ -47,6 +48,7 @@ class StateService:
         self._clock = clock or (lambda: datetime.now(datetime_timezone.utc))
         self._football = football or FootballStateStore()
         self._news = news or NewsStateStore()
+        self._alert_interruptions_enabled = alert_interruptions_enabled
 
     def current(self) -> OlympusState:
         agents = self._registry.get_all()
@@ -63,6 +65,8 @@ class StateService:
             news,
         )
         gaming = self._gaming.update(resolution, agents)
+        active_alerts = self._events.active_alerts()
+        recoveries = self._events.recoveries()
 
         return OlympusState(
             mode=resolution.mode,
@@ -94,8 +98,16 @@ class StateService:
             core_host=self._monitoring.core_host,
             network=self._monitoring.network,
             services=dict(self._monitoring.services),
-            alerts=self._events.active_alerts(),
-            recoveries=self._events.recoveries(),
+            alerts=(
+                active_alerts
+                if self._alert_interruptions_enabled
+                else []
+            ),
+            recoveries=(
+                recoveries
+                if self._alert_interruptions_enabled
+                else []
+            ),
             gaming=gaming,
         )
 

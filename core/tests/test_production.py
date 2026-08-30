@@ -22,8 +22,8 @@ from olympus_core.release import release_info
 
 class ReleaseInfoTests(unittest.TestCase):
     def test_core_reports_v1_and_reads_packaged_revision(self) -> None:
-        self.assertEqual(app.version, "1.0.3")
-        self.assertEqual(asyncio.run(health())["version"], "1.0.3")
+        self.assertEqual(app.version, "1.0.4")
+        self.assertEqual(asyncio.run(health())["version"], "1.0.4")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "VERSION").write_text("1.0.0\n", encoding="ascii")

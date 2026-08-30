@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 logger = logging.getLogger(__name__)
 DEFAULT_TIMEZONE = "Europe/Berlin"
+NEWS_PRESENTATION_MAX_SECONDS = 30.0
 
 
 def _enabled(value: str | None) -> bool:
@@ -31,6 +32,7 @@ class SpotifySettings:
     client_secret: str | None
     refresh_token: str | None
     poll_seconds: float = 5.0
+    active_poll_seconds: float = 1.5
     stale_seconds: float = 25.0
 
     @classmethod
@@ -38,12 +40,16 @@ class SpotifySettings:
         poll_seconds = _positive_float(
             os.getenv("OLYMPUS_SPOTIFY_POLL_SECONDS"), 5.0
         )
+        active_poll_seconds = _positive_float(
+            os.getenv("OLYMPUS_SPOTIFY_ACTIVE_POLL_SECONDS"), 1.5
+        )
         return cls(
             enabled=_enabled(os.getenv("OLYMPUS_SPOTIFY_ENABLED")),
             client_id=os.getenv("OLYMPUS_SPOTIFY_CLIENT_ID") or None,
             client_secret=os.getenv("OLYMPUS_SPOTIFY_CLIENT_SECRET") or None,
             refresh_token=os.getenv("OLYMPUS_SPOTIFY_REFRESH_TOKEN") or None,
             poll_seconds=poll_seconds,
+            active_poll_seconds=active_poll_seconds,
             stale_seconds=max(20.0, poll_seconds * 4),
         )
 
@@ -184,7 +190,7 @@ class NewsFeedSettings:
 class NewsPresentationSettings:
     ambient_limit: int = 3
     news_scene_seconds: float = 20.0
-    major_scene_seconds: float = 45.0
+    major_scene_seconds: float = NEWS_PRESENTATION_MAX_SECONDS
     cooldown_seconds: float = 1_800.0
     notable_threshold: float = 0.55
     important_threshold: float = 0.68
@@ -245,6 +251,11 @@ class DisplaySettings:
 
 
 @dataclass(frozen=True, slots=True)
+class PresentationSettings:
+    alert_interruptions_enabled: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class BackupSettings:
     directory: Path = Path("~/.local/share/olympus/backups")
     retention_days: int = 14
@@ -268,6 +279,7 @@ class CoreSettings:
     timezone: str = DEFAULT_TIMEZONE
     server: ServerSettings = ServerSettings()
     display: DisplaySettings = DisplaySettings()
+    presentation: PresentationSettings = PresentationSettings()
     backup: BackupSettings = BackupSettings()
     weather: WeatherSettings = WeatherSettings()
     calendar: CalendarSettings = CalendarSettings()
@@ -355,6 +367,7 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
     olympus = _mapping(data.get("olympus"))
     server_data = _mapping(data.get("server"))
     display_data = _mapping(data.get("display"))
+    presentation_data = _mapping(data.get("presentation"))
     backup_data = _mapping(data.get("backup"))
     timezone = _timezone(olympus.get("timezone"))
     weather_data = _mapping(data.get("weather"))
@@ -439,6 +452,11 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
             if display_data.get("directory")
             else None
         )),
+        presentation=PresentationSettings(
+            alert_interruptions_enabled=bool(
+                presentation_data.get("alert_interruptions_enabled", False)
+            ),
+        ),
         backup=BackupSettings(
             directory=Path(str(
                 backup_data.get("directory", "~/.local/share/olympus/backups")
@@ -570,13 +588,23 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
             interests=interests,
             presentation=NewsPresentationSettings(
                 ambient_limit=min(_positive_int(news_presentation_data.get("ambient_limit"), 3), 5),
-                news_scene_seconds=_positive_float(
-                    str(news_presentation_data.get("news_scene_seconds")) if news_presentation_data.get("news_scene_seconds") is not None else None,
-                    20.0,
+                news_scene_seconds=min(
+                    NEWS_PRESENTATION_MAX_SECONDS,
+                    _positive_float(
+                        str(news_presentation_data.get("news_scene_seconds"))
+                        if news_presentation_data.get("news_scene_seconds") is not None
+                        else None,
+                        20.0,
+                    ),
                 ),
-                major_scene_seconds=_positive_float(
-                    str(news_presentation_data.get("major_scene_seconds")) if news_presentation_data.get("major_scene_seconds") is not None else None,
-                    45.0,
+                major_scene_seconds=min(
+                    NEWS_PRESENTATION_MAX_SECONDS,
+                    _positive_float(
+                        str(news_presentation_data.get("major_scene_seconds"))
+                        if news_presentation_data.get("major_scene_seconds") is not None
+                        else None,
+                        NEWS_PRESENTATION_MAX_SECONDS,
+                    ),
                 ),
                 cooldown_seconds=_positive_float(
                     str(news_presentation_data.get("cooldown_minutes")) if news_presentation_data.get("cooldown_minutes") is not None else None,

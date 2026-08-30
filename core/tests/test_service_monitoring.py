@@ -1,11 +1,13 @@
 import unittest
 
+from olympus_core.agents.registry import AgentRegistry
 from olympus_core.models.monitoring import ProbeStatus
 from olympus_core.monitoring.config import MonitoringConfig, NetworkConfig, ServiceConfig
 from olympus_core.monitoring.probes import ProbeResult
 from olympus_core.monitoring.services import ServiceCollector
 from olympus_core.services.events import EventService
 from olympus_core.services.monitoring_store import MonitoringStore
+from olympus_core.services.state import StateService
 
 
 class SequenceProbe:
@@ -55,6 +57,12 @@ class ServiceCollectorTests(unittest.IsolatedAsyncioTestCase):
         await collector.poll_once()
         self.assertEqual(store.services[service.id].status, ProbeStatus.DOWN)
         self.assertEqual(len(events.active_alerts()), 1)
+        display_state = StateService(
+            AgentRegistry(), monitoring=store, events=events
+        ).display_state()
+        self.assertEqual(display_state.services[service.id].status, ProbeStatus.DOWN)
+        self.assertEqual(display_state.alerts, [])
+        self.assertEqual(display_state.mode.value, "idle")
         await collector.poll_once()
         self.assertEqual(store.services[service.id].status, ProbeStatus.DOWN)
         await collector.poll_once()

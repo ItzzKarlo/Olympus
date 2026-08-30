@@ -40,7 +40,7 @@ class DisplayHubTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(display.messages[0]["mode"], "idle")
         self.assertEqual(self.hub.connection_count, 1)
 
-    async def test_reconnecting_display_receives_active_alert(self) -> None:
+    async def test_reconnecting_display_does_not_receive_disabled_alert(self) -> None:
         events = EventService()
         await events.raise_incident(
             "service:nas",
@@ -55,7 +55,8 @@ class DisplayHubTests(unittest.IsolatedAsyncioTestCase):
 
         await self.hub.connect(display, state)  # type: ignore[arg-type]
 
-        self.assertEqual(display.messages[0]["alerts"][0]["title"], "NAS is down")
+        self.assertEqual(events.active_alerts()[0].title, "NAS is down")
+        self.assertEqual(display.messages[0]["alerts"], [])
 
     async def test_broken_display_does_not_block_healthy_display(self) -> None:
         healthy = FakeWebSocket()

@@ -115,9 +115,11 @@ When no activity is active, Core chooses `NIGHT` during the configured night
 period and `IDLE` during the day. Night is an environmental policy, not another
 user activity.
 
-Alerts do not become another normal mode. They overlay whichever scene is
-already active. When Core confirms recovery, it sends a temporary recovery event
-with measured downtime, then the Display returns to the unchanged scene below.
+Alerts do not become another normal mode. User-facing alert interruptions are
+disabled by default through `[presentation].alert_interruptions_enabled`, so
+monitoring incidents remain available to diagnostics and the health strip
+without overlaying or changing the active scene. The presentation gate preserves
+the existing alert lifecycle for a possible future opt-in.
 
 ## Run Olympus Core
 
@@ -308,9 +310,9 @@ persistent bottom strip. Missing metrics remain absent. Olympus does not label
 PMIC/firmware signals as total wall power and does not invent current or wattage.
 
 Failures and recoveries are debounced. A single lost request does not produce an
-incident; repeated failures create one persistent active alert, and repeated
-successes resolve it. A reconnecting Display immediately receives current active
-alerts in the full state snapshot.
+incident; repeated failures create one persistent internal alert, and repeated
+successes resolve it. While alert interruptions are disabled, Display snapshots
+omit those alert presentation records but retain service and network health.
 
 ## Optional Spotify integration
 
@@ -359,6 +361,7 @@ OLYMPUS_SPOTIFY_CLIENT_ID=your_client_id
 OLYMPUS_SPOTIFY_CLIENT_SECRET=your_client_secret
 OLYMPUS_SPOTIFY_REFRESH_TOKEN=your_refresh_token
 OLYMPUS_SPOTIFY_POLL_SECONDS=5
+OLYMPUS_SPOTIFY_ACTIVE_POLL_SECONDS=1.5
 ```
 
 Start Core with the environment file:
@@ -373,7 +376,8 @@ The available settings are:
 - `OLYMPUS_SPOTIFY_CLIENT_ID` — Spotify application client ID
 - `OLYMPUS_SPOTIFY_CLIENT_SECRET` — Spotify application client secret
 - `OLYMPUS_SPOTIFY_REFRESH_TOKEN` — user authorization refresh token
-- `OLYMPUS_SPOTIFY_POLL_SECONDS` — polling interval in seconds (default `5`)
+- `OLYMPUS_SPOTIFY_POLL_SECONDS` — inactive polling interval in seconds (default `5`)
+- `OLYMPUS_SPOTIFY_ACTIVE_POLL_SECONDS` — active-playback polling interval (default `1.5`)
 
 Credentials and tokens remain in the ignored `core/.env` file. If Spotify is
 temporarily unreachable, Core keeps the last good playback state briefly and
@@ -645,7 +649,7 @@ local_regions = ["DE"]
 [news.presentation]
 ambient_limit = 3
 news_scene_seconds = 20
-major_scene_seconds = 45
+major_scene_seconds = 30
 cooldown_minutes = 30
 notable_threshold = 0.55
 important_threshold = 0.68

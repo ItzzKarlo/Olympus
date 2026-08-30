@@ -6,7 +6,7 @@ import inspect
 import logging
 from uuid import uuid4
 
-from olympus_core.config import NewsSettings
+from olympus_core.config import NEWS_PRESENTATION_MAX_SECONDS, NewsSettings
 from olympus_core.integrations.news.base import NewsProvider
 from olympus_core.integrations.news.engine import NewsEngine
 from olympus_core.models.news import (
@@ -137,11 +137,12 @@ class NewsCollector:
         current = state.presentation
         if current is not None and LEVEL_RANK[current.level] >= LEVEL_RANK[cluster.importance.level]:
             return state
-        seconds = (
+        configured_seconds = (
             self._settings.presentation.major_scene_seconds
             if cluster.importance.level == NewsImportanceLevel.MAJOR
             else self._settings.presentation.news_scene_seconds
         )
+        seconds = min(NEWS_PRESENTATION_MAX_SECONDS, configured_seconds)
         presentation = NewsPresentation(
             story_id=cluster.id,
             level=cluster.importance.level,

@@ -30,6 +30,11 @@ export function MediaMode({ connectionStatus, media }: MediaModeProps) {
 
   return (
     <section className="scene scene--media">
+      {artwork ? (
+        <div className="media-artwork-backdrop" aria-hidden="true">
+          <img src={artwork} alt="" />
+        </div>
+      ) : null}
       <header className="scene__header media-header">
         <Brand />
         <div className="media-header__status">
