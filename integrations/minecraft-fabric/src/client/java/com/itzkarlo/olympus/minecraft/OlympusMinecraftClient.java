@@ -7,7 +7,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 public final class OlympusMinecraftClient implements ClientModInitializer {
     static final String VERSION = "0.1.0";
@@ -83,9 +83,9 @@ public final class OlympusMinecraftClient implements ClientModInitializer {
 
         JsonObject world = new JsonObject();
         world.addProperty("dimension", dimension);
-        ResourceLocation biome = client.level.getBiome(player.blockPosition())
+        Identifier biome = client.level.getBiome(player.blockPosition())
             .unwrapKey()
-            .map(key -> key.location())
+            .map(key -> key.identifier())
             .orElse(null);
         world.addProperty("biome", biome == null ? "unknown" : normalizeId(biome.toString()));
 
@@ -128,7 +128,7 @@ public final class OlympusMinecraftClient implements ClientModInitializer {
     }
 
     private static String dimension(Minecraft client) {
-        return normalizeId(client.level.dimension().location().toString());
+        return normalizeId(client.level.dimension().identifier().toString());
     }
 
     private static String gameMode(Minecraft client) {
