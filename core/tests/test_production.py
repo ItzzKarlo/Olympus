@@ -20,10 +20,14 @@ from olympus_core.main import app, health
 from olympus_core.release import release_info
 
 
+ROOT = Path(__file__).resolve().parents[2]
+
+
 class ReleaseInfoTests(unittest.TestCase):
     def test_core_reports_v1_and_reads_packaged_revision(self) -> None:
-        self.assertEqual(app.version, "1.0.4")
-        self.assertEqual(asyncio.run(health())["version"], "1.0.4")
+        expected_version = (ROOT / "VERSION").read_text(encoding="ascii").strip()
+        self.assertEqual(app.version, expected_version)
+        self.assertEqual(asyncio.run(health())["version"], expected_version)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "VERSION").write_text("1.0.0\n", encoding="ascii")
