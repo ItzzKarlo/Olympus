@@ -5,6 +5,7 @@ import { FootballEventLayer } from "./components/FootballEventLayer";
 import { GameplayEventLayer } from "./components/GameplayEventLayer";
 import { HermesHealthBar } from "./components/HermesHealthBar";
 import { ParticleField } from "./components/ParticleField";
+import { SeasonalEnvironment } from "./components/SeasonalEnvironment";
 import { SeasonalLayer } from "./components/SeasonalLayer";
 import { useClock } from "./hooks/useClock";
 import { useOlympusState } from "./hooks/useOlympusState";
@@ -100,6 +101,7 @@ export default function App() {
         theme={theme.particles}
       />
       <SeasonalLayer presentation={seasonal} />
+      <SeasonalEnvironment mode={state.mode} presentation={seasonal} />
       <div key={state.mode} className="scene-transition">
         {scene}
       </div>
