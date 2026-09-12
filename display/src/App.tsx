@@ -5,6 +5,7 @@ import { FootballEventLayer } from "./components/FootballEventLayer";
 import { GameplayEventLayer } from "./components/GameplayEventLayer";
 import { HermesHealthBar } from "./components/HermesHealthBar";
 import { ParticleField } from "./components/ParticleField";
+import { SeasonalLayer } from "./components/SeasonalLayer";
 import { useClock } from "./hooks/useClock";
 import { useOlympusState } from "./hooks/useOlympusState";
 import { useSceneTheme } from "./hooks/useSceneTheme";
@@ -16,6 +17,7 @@ import { MatchdayMode } from "./modes/Matchday/MatchdayMode";
 import { NightMode } from "./modes/Night/NightMode";
 import { NewsMode } from "./modes/News/NewsMode";
 import { sceneStyle } from "./theme/SceneTheme";
+import { getSeasonalPresentation } from "./theme/seasonalTheme";
 import { idleTheme } from "./theme/themes";
 
 function StartupScreen() {
@@ -37,7 +39,8 @@ function StartupScreen() {
 export default function App() {
   const { connectionStatus, footballEvents, gameplayEvents, state } = useOlympusState();
   const now = useClock();
-  const theme = useSceneTheme(connectionStatus === "connected" ? state : null);
+  const seasonal = getSeasonalPresentation(now);
+  const theme = useSceneTheme(connectionStatus === "connected" ? state : null, seasonal);
 
   if (state === null) return <StartupScreen />;
 
@@ -62,11 +65,17 @@ export default function App() {
     );
 
   return (
-    <main className={`olympus-display mode-${state.mode}${state.time_policy.is_night ? " policy-night" : ""}`} style={sceneStyle(theme)}>
+    <main
+      className={`olympus-display mode-${state.mode} seasonal-${seasonal.id}${state.time_policy.is_night ? " policy-night" : ""}`}
+      data-season={seasonal.season}
+      data-seasonal-event={seasonal.event ?? undefined}
+      style={sceneStyle(theme)}
+    >
       <ParticleField
-        key={`${state.mode}:${state.gaming?.game.id ?? ""}:${state.football?.matchday?.phase ?? ""}:${state.weather?.current?.condition ?? ""}:${state.time_policy.is_night}`}
+        key={`${state.mode}:${state.gaming?.game.id ?? ""}:${state.football?.matchday?.phase ?? ""}:${state.weather?.current?.condition ?? ""}:${state.time_policy.is_night}:${seasonal.id}`}
         theme={theme.particles}
       />
+      <SeasonalLayer presentation={seasonal} />
       <div key={state.mode} className="scene-transition">
         {scene}
       </div>
