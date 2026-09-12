@@ -9,6 +9,7 @@ import { getIdleWeatherTheme } from "../theme/idleWeatherTheme";
 import { applyNightAdaptation, getNightTheme } from "../theme/nightTheme";
 import { getMatchdayTheme } from "../theme/matchdayTheme";
 import { getNewsTheme } from "../theme/newsTheme";
+import { applySeasonalTheme, type SeasonalPresentation } from "../theme/seasonalTheme";
 import type { OlympusState } from "../types/state";
 
 interface ResolvedMediaTheme {
@@ -16,7 +17,10 @@ interface ResolvedMediaTheme {
   theme: SceneTheme;
 }
 
-export function useSceneTheme(state: OlympusState | null): SceneTheme {
+export function useSceneTheme(
+  state: OlympusState | null,
+  seasonal: SeasonalPresentation,
+): SceneTheme {
   const track = state?.media?.track;
   const key = track?.id ?? track?.album?.id ?? track?.title ?? "olympus-media";
   const artworkUrl = track?.album?.artwork_url ?? null;
@@ -32,11 +36,11 @@ export function useSceneTheme(state: OlympusState | null): SceneTheme {
     return () => {
       cancelled = true;
     };
-  }, [artworkUrl, key]);
+  }, [artworkUrl, key, track]);
 
   let theme: SceneTheme;
   if (state?.mode === "matchday" && state.football?.matchday) {
-    return getMatchdayTheme(
+    theme = getMatchdayTheme(
       state.football.matchday.match.home.id === state.football.matchday.tracked_team.id
         ? state.football.matchday.match.away.id
         : state.football.matchday.match.home.id,
@@ -44,8 +48,7 @@ export function useSceneTheme(state: OlympusState | null): SceneTheme {
       state.time_policy.is_night,
       state.football.matchday.result,
     );
-  }
-  if (state?.mode === "news" && state.news?.active_story) {
+  } else if (state?.mode === "news" && state.news?.active_story) {
     theme = getNewsTheme(state.news.active_story.topic, state.news.active_story.importance.level);
   } else if (state?.mode === "gaming" && state.gaming) {
     if (state.gaming.game.id === "minecraft" && state.gaming.minecraft) {
@@ -58,12 +61,16 @@ export function useSceneTheme(state: OlympusState | null): SceneTheme {
   } else if (state?.mode === "media") {
     theme = mediaTheme?.theme ?? initialFallback;
   } else if (state?.mode === "night") {
-    return getNightTheme(state.weather?.current?.condition);
+    theme = getNightTheme(state.weather?.current?.condition);
   } else if (state?.mode === "idle" && state.weather?.available) {
     theme = getIdleWeatherTheme(state.weather.current?.condition);
   } else {
     theme = idleTheme;
   }
 
-  return state?.time_policy.is_night ? applyNightAdaptation(theme) : theme;
+  const adapted = state?.time_policy.is_night && state.mode !== "night"
+    ? applyNightAdaptation(theme)
+    : theme;
+
+  return applySeasonalTheme(adapted, seasonal, state?.mode ?? "idle");
 }
