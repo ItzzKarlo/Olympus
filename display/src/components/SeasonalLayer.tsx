@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import type { CSSProperties } from "react";
 
 import type { SeasonalPresentation } from "../theme/seasonalTheme";
 
@@ -57,7 +58,7 @@ export function SeasonalLayer({ presentation }: SeasonalLayerProps) {
             "--season-duration": item.duration,
             "--season-scale": String(item.scale),
             "--season-opacity": String(item.opacity),
-          } as React.CSSProperties}
+          } as CSSProperties}
         >
           {item.glyph}
         </span>
