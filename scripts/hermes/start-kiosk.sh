@@ -7,10 +7,24 @@ DRM_ROOT=${OLYMPUS_DRM_ROOT:-/sys/class/drm}
 WAIT_SECONDS=${OLYMPUS_KIOSK_WAIT_SECONDS:-3}
 MONITOR_WAIT_SECONDS=${OLYMPUS_KIOSK_MONITOR_WAIT_SECONDS:-10}
 MAX_WAIT_ATTEMPTS=${OLYMPUS_KIOSK_MAX_WAIT_ATTEMPTS:-0}
+SEASONAL_DATE=${OLYMPUS_SEASONAL_DATE:-}
 CURL=${CURL_BIN:-curl}
 CAGE=${CAGE_BIN:-}
 BROWSER=${BROWSER_BIN:-/usr/bin/brave-browser}
 PROC_ROOT=${OLYMPUS_PROC_ROOT:-/proc}
+
+DISPLAY_URL="$CORE_URL/"
+if [ -n "$SEASONAL_DATE" ]; then
+    case "$SEASONAL_DATE" in
+        [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9])
+            DISPLAY_URL="$CORE_URL/?seasonal_date=$SEASONAL_DATE"
+            ;;
+        *)
+            echo "OLYMPUS_SEASONAL_DATE must use YYYY-MM-DD." >&2
+            exit 2
+            ;;
+    esac
+fi
 
 if [ -z "$CAGE" ]; then
     CAGE=$(command -v cage || true)
@@ -55,7 +69,7 @@ clear_stale_singletons() {
 }
 
 if [ "${1:-}" = "--print-command" ] || [ "${OLYMPUS_KIOSK_DRY_RUN:-0}" = "1" ]; then
-    printf '%s\n' "$CAGE -d -s -- $BROWSER --ozone-platform=wayland --kiosk --no-first-run --noerrdialogs --disable-session-crashed-bubble --disable-translate --overscroll-history-navigation=0 --user-data-dir=$PROFILE $CORE_URL/"
+    printf '%s\n' "$CAGE -d -s -- $BROWSER --ozone-platform=wayland --kiosk --no-first-run --noerrdialogs --disable-session-crashed-bubble --disable-translate --overscroll-history-navigation=0 --user-data-dir=$PROFILE $DISPLAY_URL"
     exit 0
 fi
 if [ "${1:-}" = "--check-monitor" ]; then
@@ -95,4 +109,4 @@ exec "$CAGE" -d -s -- "$BROWSER" \
     --disable-translate \
     --overscroll-history-navigation=0 \
     --user-data-dir="$PROFILE" \
-    "$CORE_URL/"
+    "$DISPLAY_URL"

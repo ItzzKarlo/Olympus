@@ -20,6 +20,30 @@ import { sceneStyle } from "./theme/SceneTheme";
 import { getSeasonalPresentation } from "./theme/seasonalTheme";
 import { idleTheme } from "./theme/themes";
 
+function seasonalDateFor(now: Date): Date {
+  const raw = new URLSearchParams(window.location.search).get("seasonal_date");
+  if (!raw) return now;
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (!match) return now;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const candidate = new Date(now);
+  candidate.setFullYear(year, month - 1, day);
+
+  if (
+    candidate.getFullYear() !== year ||
+    candidate.getMonth() !== month - 1 ||
+    candidate.getDate() !== day
+  ) {
+    return now;
+  }
+
+  return candidate;
+}
+
 function StartupScreen() {
   return (
     <main className="startup-screen">
@@ -39,7 +63,7 @@ function StartupScreen() {
 export default function App() {
   const { connectionStatus, footballEvents, gameplayEvents, state } = useOlympusState();
   const now = useClock();
-  const seasonal = getSeasonalPresentation(now);
+  const seasonal = getSeasonalPresentation(seasonalDateFor(now));
   const theme = useSceneTheme(connectionStatus === "connected" ? state : null, seasonal);
 
   if (state === null) return <StartupScreen />;
