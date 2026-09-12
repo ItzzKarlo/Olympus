@@ -36,7 +36,7 @@ export function useSceneTheme(
     return () => {
       cancelled = true;
     };
-  }, [artworkUrl, key, track]);
+  }, [artworkUrl, key]);
 
   let theme: SceneTheme;
   if (state?.mode === "matchday" && state.football?.matchday) {
