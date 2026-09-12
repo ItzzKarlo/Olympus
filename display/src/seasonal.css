@@ -1,0 +1,131 @@
+.seasonal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.seasonal-layer__halo {
+  position: absolute;
+  inset: -18%;
+  opacity: .34;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 38%),
+    radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 34%);
+  filter: blur(24px);
+}
+
+.seasonal-layer__item {
+  position: absolute;
+  left: var(--season-left);
+  top: var(--season-top);
+  opacity: var(--season-opacity);
+  transform: translate3d(0, 0, 0) scale(var(--season-scale));
+  font-size: clamp(.8rem, 1.3vw, 1.55rem);
+  line-height: 1;
+  filter: saturate(.85);
+  animation: seasonal-drift var(--season-duration) ease-in-out var(--season-delay) infinite alternate;
+  will-change: transform;
+}
+
+.seasonal-layer__badge {
+  position: fixed;
+  top: .72rem;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: .42rem;
+  max-width: calc(100vw - 4rem);
+  padding: .3rem .65rem;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: 999px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--background) 80%, transparent);
+  backdrop-filter: blur(10px);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: clamp(.48rem, .56vw, .6rem);
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  transform: translateX(-50%);
+  opacity: .72;
+}
+
+.seasonal-layer__badge > span {
+  color: var(--accent);
+  font-size: .8rem;
+  letter-spacing: 0;
+}
+
+.mode-matchday .seasonal-layer__badge,
+.mode-news .seasonal-layer__badge,
+.mode-gaming .seasonal-layer__badge,
+.mode-media .seasonal-layer__badge {
+  opacity: .38;
+}
+
+.mode-matchday .seasonal-layer__item,
+.mode-news .seasonal-layer__item,
+.mode-gaming .seasonal-layer__item,
+.mode-media .seasonal-layer__item {
+  opacity: calc(var(--season-opacity) * .45);
+}
+
+.seasonal-halloween .seasonal-layer__item {
+  filter: drop-shadow(0 0 .4rem rgba(239, 141, 50, .18));
+}
+
+.seasonal-christmas-eve .seasonal-layer__item,
+.seasonal-christmas .seasonal-layer__item,
+.seasonal-advent .seasonal-layer__item,
+.seasonal-st-nicholas .seasonal-layer__item {
+  filter: drop-shadow(0 0 .45rem rgba(216, 180, 93, .14));
+}
+
+.seasonal-new-years-eve .seasonal-layer__item,
+.seasonal-new-year .seasonal-layer__item {
+  animation-name: seasonal-sparkle;
+}
+
+@keyframes seasonal-drift {
+  from {
+    transform: translate3d(-.35rem, -.5rem, 0) rotate(-5deg) scale(var(--season-scale));
+  }
+
+  to {
+    transform: translate3d(.65rem, .9rem, 0) rotate(7deg) scale(var(--season-scale));
+  }
+}
+
+@keyframes seasonal-sparkle {
+  0% {
+    transform: translate3d(-.25rem, -.35rem, 0) rotate(-8deg) scale(var(--season-scale));
+    filter: brightness(.95);
+  }
+
+  55% {
+    filter: brightness(1.35);
+  }
+
+  100% {
+    transform: translate3d(.55rem, .75rem, 0) rotate(10deg) scale(var(--season-scale));
+    filter: brightness(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seasonal-layer__item {
+    animation: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .seasonal-layer__badge {
+    top: .45rem;
+  }
+
+  .seasonal-layer__item:nth-of-type(n + 10) {
+    display: none;
+  }
+}
