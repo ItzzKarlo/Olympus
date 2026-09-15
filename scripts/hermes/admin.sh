@@ -7,14 +7,14 @@ export OLYMPUS_CONFIG
 
 if [ "${1:-}" = "--core-dir" ]; then
     if [ "$#" -lt 3 ]; then
-        echo "Usage: admin.sh [--core-dir PATH] <backup|enrollment|devices> [arguments...]" >&2
+        echo "Usage: admin.sh [--core-dir PATH] <control-password|backup|enrollment|devices> [arguments...]" >&2
         exit 2
     fi
     CORE_DIR=$2
     shift 2
 fi
 if [ "$#" -eq 0 ]; then
-    echo "Usage: admin.sh [--core-dir PATH] <backup|enrollment|devices> [arguments...]" >&2
+    echo "Usage: admin.sh [--core-dir PATH] <control-password|backup|enrollment|devices> [arguments...]" >&2
     exit 2
 fi
 if [ ! -d "$CORE_DIR/olympus_core" ]; then
