@@ -155,6 +155,7 @@ async def persistence_maintenance() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    control_task = asyncio.create_task(control.watch(), name="control-overrides") if control else None
     database.initialize()
     logger.info("Core persistence initialized")
     if not core_settings.security.require_agent_auth:
@@ -316,6 +317,9 @@ async def lifespan(_app: FastAPI):
         await monitoring.stop()
         maintenance_task.cancel()
         await asyncio.gather(maintenance_task, return_exceptions=True)
+        if control_task:
+            control_task.cancel()
+            await asyncio.gather(control_task, return_exceptions=True)
         database.close()
 
 
@@ -371,5 +375,16 @@ async def agent_socket(websocket: WebSocket) -> None:
 async def display_socket(websocket: WebSocket) -> None:
     await handle_display_socket(websocket, display_hub, state_service)
 
+
+# Control fails closed independently; Display and collector routes remain usable.
+control = None
+try:
+    from olympus_core.control.routes import Control, install_control
+    control = Control(core_settings, state_service, display_hub, device_repository, enrollment_repository, publish_display_state)
+    install_control(app, control)
+except Exception:
+    logger.exception("Control unavailable; continuing normal Olympus operation")
+    state_service.control_overrides = None
+    control = None
 
 install_display_routes(app, core_settings.display.resolved_directory)

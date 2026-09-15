@@ -14,6 +14,7 @@ from olympus_core.persistence.backup import create_backup, prune_backups
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Local Olympus Core administration")
     groups = parser.add_subparsers(dest="group", required=True)
+    groups.add_parser("control-password", help="Set or rotate the Control password interactively")
     enrollment = groups.add_parser("enrollment")
     enrollment_commands = enrollment.add_subparsers(dest="command", required=True)
     create = enrollment_commands.add_parser("create")
@@ -36,6 +37,28 @@ def _short_time(value: datetime | None) -> str:
 
 def main() -> int:
     args = _parser().parse_args()
+    if args.group == "control-password":
+        import getpass
+        import os
+        from olympus_core.control.auth import password_record
+        from olympus_core.control.storage import atomic_write
+        import json
+        import grp
+        path = Path(os.getenv("OLYMPUS_CONTROL_CREDENTIALS", "/etc/olympus/control.json"))
+        password = getpass.getpass("New Control password (12+ characters): ")
+        if password != getpass.getpass("Repeat password: "):
+            print("Passwords did not match", file=sys.stderr)
+            return 1
+        try:
+            atomic_write(path, json.dumps(password_record(password)))
+            if os.geteuid() == 0:
+                os.chown(path, 0, grp.getgrnam("olympus").gr_gid)
+                path.chmod(0o640)
+        except (OSError, ValueError, KeyError) as error:
+            print(f"Control password setup failed: {error}", file=sys.stderr)
+            return 1
+        print("Control password set. Existing sessions invalidated. No restart required.")
+        return 0
     settings = load_core_config()
     if args.group == "backup":
         destination = args.destination or settings.backup.resolved_directory

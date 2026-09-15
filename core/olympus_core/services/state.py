@@ -35,6 +35,7 @@ class StateService:
         news: NewsStateStore | None = None,
         alert_interruptions_enabled: bool = False,
     ) -> None:
+        self.control_overrides = None
         self._registry = registry
         self._media = media or MediaStateStore()
         self._resolver = resolver or ModeResolver()
@@ -113,6 +114,13 @@ class StateService:
 
     def display_state(self) -> DisplayState:
         state = self.current()
+        if self.control_overrides is not None:
+            # current() remains real. Only outgoing Display presentation is transformed.
+            if self.control_overrides.read() is not None:
+                critical = [a for a in self._events.active_alerts() if a.severity == "critical"]
+                ids = {a.id for a in state.alerts}
+                state.alerts.extend(a for a in critical if a.id not in ids)
+            state = self.control_overrides.apply(state)
         return DisplayState(
             **state.model_dump(),
             generated_at=datetime.now(datetime_timezone.utc),

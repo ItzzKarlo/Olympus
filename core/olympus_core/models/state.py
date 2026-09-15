@@ -63,6 +63,7 @@ class GamingState(BaseModel):
 
 
 class OlympusState(BaseModel):
+    control: dict | None = None
     mode: ActivityMode
     active_device: str | None
     machines: dict[str, MachineState]

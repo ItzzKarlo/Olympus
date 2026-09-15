@@ -21,8 +21,8 @@ import { sceneStyle } from "./theme/SceneTheme";
 import { getSeasonalPresentation } from "./theme/seasonalTheme";
 import { idleTheme } from "./theme/themes";
 
-function seasonalDateFor(now: Date): Date {
-  const raw = new URLSearchParams(window.location.search).get("seasonal_date");
+function seasonalDateFor(now: Date, override?: string | null): Date {
+  const raw = override ?? new URLSearchParams(window.location.search).get("seasonal_date");
   if (!raw) return now;
 
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
@@ -64,7 +64,7 @@ function StartupScreen() {
 export default function App() {
   const { connectionStatus, footballEvents, gameplayEvents, state } = useOlympusState();
   const now = useClock();
-  const seasonal = getSeasonalPresentation(seasonalDateFor(now));
+  const seasonal = getSeasonalPresentation(seasonalDateFor(now, state?.control?.seasonal_date));
   const theme = useSceneTheme(connectionStatus === "connected" ? state : null, seasonal);
 
   if (state === null) return <StartupScreen />;
@@ -96,18 +96,15 @@ export default function App() {
       data-seasonal-event={seasonal.event ?? undefined}
       style={sceneStyle(theme)}
     >
-      <ParticleField
-        key={`${state.mode}:${state.gaming?.game.id ?? ""}:${state.football?.matchday?.phase ?? ""}:${state.weather?.current?.condition ?? ""}:${state.time_policy.is_night}:${seasonal.id}`}
-        theme={theme.particles}
-      />
       <SeasonalLayer presentation={seasonal} />
-      <SeasonalEnvironment mode={state.mode} presentation={seasonal} />
+      <SeasonalEnvironment mode={state.mode} presentation={seasonal} night={state.time_policy.is_night} retreat={state.alerts.length > 0} control={state.control?.environment} />
       <div key={state.mode} className="scene-transition">
         {scene}
       </div>
       <GameplayEventLayer events={state.mode === "gaming" ? gameplayEvents : []} />
       <FootballEventLayer events={footballEvents} state={state} />
       <EventOverlayLayer alerts={state.alerts} now={now} recoveries={state.recoveries} />
+      {state.control?.active ? <div className="control-indicator">CONTROL OVERRIDES · {state.control.scene !== "auto" ? `FORCED ${state.control.scene.toUpperCase()} · ` : ""}{state.control.simulation ? `SIMULATION: ${state.control.simulation}` : "PREVIEW"}</div> : null}
       <HermesHealthBar connectionStatus={connectionStatus} state={state} />
       {connectionStatus !== "connected" ? (
         <div className="reconnect-banner" role="status">

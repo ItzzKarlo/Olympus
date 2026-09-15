@@ -427,20 +427,6 @@ select {
 .scene--ambient-idle .ambient-football strong { font-size: clamp(1.05rem, 1.35vw, 1.4rem); line-height: 1.3; }
 .scene--ambient-idle .ambient-football small { font-size: clamp(.68rem, .74vw, .8rem); line-height: 1.4; }
 
-.ambient-idle-stage:not(:has(.ambient-next)):not(:has(.ambient-calendar)) {
-  grid-template-columns: 1fr;
-}
-
-.ambient-idle-stage:not(:has(.ambient-next)):not(:has(.ambient-calendar)) .ambient-idle-hero {
-  justify-self: center;
-  width: min(100%, 54rem);
-  text-align: center;
-}
-
-.ambient-idle-stage:not(:has(.ambient-next)):not(:has(.ambient-calendar)) .ambient-weather { justify-self: center; }
-.ambient-idle-stage:not(:has(.ambient-next)):not(:has(.ambient-calendar)) .ambient-weather__current,
-.ambient-idle-stage:not(:has(.ambient-next)):not(:has(.ambient-calendar)) .ambient-weather__details { justify-content: center; }
-
 .scene--night {
   isolation: isolate;
 }

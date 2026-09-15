@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { getCoreWebSocketUrl, parseDisplayMessage } from "../api/core";
 import type { ConnectionStatus, FootballDisplayEvent, GameplayEvent, OlympusState } from "../types/state";
 
+const preview = import.meta.env.DEV ? (await import("../dev/preview")).previewState() : null;
+
 const RECONNECT_DELAY_MS = 2_000;
 
 interface OlympusConnection {
@@ -14,12 +16,13 @@ interface OlympusConnection {
 
 export function useOlympusState(): OlympusConnection {
   const [connectionStatus, setConnectionStatus] =
-    useState<ConnectionStatus>("connecting");
-  const [state, setState] = useState<OlympusState | null>(null);
+    useState<ConnectionStatus>(preview ? "connected" : "connecting");
+  const [state, setState] = useState<OlympusState | null>(preview);
   const [gameplayEvents, setGameplayEvents] = useState<GameplayEvent[]>([]);
   const [footballEvents, setFootballEvents] = useState<FootballDisplayEvent[]>([]);
 
   useEffect(() => {
+    if (preview) return;
     let active = true;
     let hasConnected = false;
     let socket: WebSocket | null = null;

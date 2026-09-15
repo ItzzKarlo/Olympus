@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 
-RESERVED_PREFIXES = ("api", "ws")
+RESERVED_PREFIXES = ("api", "ws", "control")
 
 
 def install_display_routes(app: FastAPI, directory: Path | None) -> None:

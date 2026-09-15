@@ -607,7 +607,18 @@ export interface TimePolicyState {
   next_transition_at: string | null;
 }
 
+export interface ControlPresentation {
+  active: boolean;
+  seasonal_date: string | null;
+  day_night: "auto" | "day" | "night";
+  scene: string;
+  simulation: string | null;
+  expires_at: number | null;
+  environment: { enabled: "auto" | "on" | "off"; intensity: "auto" | "full" | "calm" | "reduced" | "minimal"; animations: "auto" | "on" | "off"; reduced_motion: boolean };
+}
+
 export interface OlympusState {
+  control?: ControlPresentation | null;
   type: "state";
   mode: ActivityMode;
   active_device: string | null;
