@@ -8,6 +8,7 @@ on:
       - "display/**"
       - "deploy/hermes/**"
       - "docs/hermes-deployment.md"
+      - "docs/control.md"
       - "scripts/hermes/**"
       - "VERSION"
       - ".github/workflows/hermes-production.yml"
