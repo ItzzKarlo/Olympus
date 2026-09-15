@@ -227,10 +227,22 @@ else
     echo "Release $VERSION already exists with identical provenance; reusing it unchanged."
 fi
 
-# Control uses systemd's existing D-Bus/PolicyKit path, compatible with NoNewPrivileges.
-python3 "$TARGET/scripts/hermes/setup-control.py"
-install -d -o root -g root -m 0755 /etc/polkit-1/rules.d
-install -o root -g root -m 0644 "$TARGET/deploy/polkit/49-olympus-control.rules" /etc/polkit-1/rules.d/49-olympus-control.rules
+# Control is an integrated Core capability. Older/synthetic releases without the
+# control package remain installable; releases that contain Control must carry
+# its bootstrap helper and PolicyKit rule as part of the same immutable tree.
+if [ -d "$TARGET/core/olympus_core/control" ]; then
+    [ -f "$TARGET/scripts/hermes/setup-control.py" ] || {
+        echo "Control bootstrap helper is missing from the release." >&2
+        exit 1
+    }
+    [ -f "$TARGET/deploy/polkit/49-olympus-control.rules" ] || {
+        echo "Control PolicyKit rule is missing from the release." >&2
+        exit 1
+    }
+    python3 "$TARGET/scripts/hermes/setup-control.py"
+    install -d -o root -g root -m 0755 /etc/polkit-1/rules.d
+    install -o root -g root -m 0644 "$TARGET/deploy/polkit/49-olympus-control.rules" /etc/polkit-1/rules.d/49-olympus-control.rules
+fi
 
 for unit in "$TARGET"/deploy/systemd/*; do
     install -o root -g root -m 0644 "$unit" "/etc/systemd/system/$(basename "$unit")"
