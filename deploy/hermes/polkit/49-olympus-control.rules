@@ -1,0 +1,11 @@
+// Olympus Core can manage only these installed units and these verbs.
+// No unit-file editing, transient units, daemon reload, kill, or generic exec.
+polkit.addRule(function(action, subject) {
+    if (subject.user !== "olympus" || action.id !== "org.freedesktop.systemd1.manage-units") return;
+    var units = ["olympus-core.service", "olympus-kiosk.service", "olympus-healthcheck.service", "olympus-healthcheck.timer", "olympus-backup.service", "olympus-backup.timer"];
+    var unit = action.lookup("unit"), verb = action.lookup("verb");
+    if (units.indexOf(unit) < 0) return polkit.Result.NO;
+    if (["start", "stop", "restart"].indexOf(verb) >= 0) return polkit.Result.YES;
+    if (unit === "olympus-kiosk.service" && verb === "reset-failed") return polkit.Result.YES;
+    return polkit.Result.NO;
+});

@@ -113,7 +113,7 @@ if [ "$INSTALL_CORE_PACKAGES" -eq 1 ] || [ "$INSTALL_KIOSK_PACKAGES" -eq 1 ]; th
     apt-get update
 fi
 if [ "$INSTALL_CORE_PACKAGES" -eq 1 ]; then
-    apt-get install --no-install-recommends python3 python3-venv python3-pip curl ca-certificates
+    apt-get install --no-install-recommends python3 python3-venv python3-pip curl ca-certificates polkitd
 fi
 if [ "$INSTALL_KIOSK_PACKAGES" -eq 1 ]; then
     ARCHITECTURE=$(dpkg --print-architecture)
@@ -226,6 +226,11 @@ if [ "$TARGET_EXISTS" -eq 0 ]; then
 else
     echo "Release $VERSION already exists with identical provenance; reusing it unchanged."
 fi
+
+# Control uses systemd's existing D-Bus/PolicyKit path, compatible with NoNewPrivileges.
+python3 "$TARGET/scripts/hermes/setup-control.py"
+install -d -o root -g root -m 0755 /etc/polkit-1/rules.d
+install -o root -g root -m 0644 "$TARGET/deploy/polkit/49-olympus-control.rules" /etc/polkit-1/rules.d/49-olympus-control.rules
 
 for unit in "$TARGET"/deploy/systemd/*; do
     install -o root -g root -m 0644 "$unit" "/etc/systemd/system/$(basename "$unit")"

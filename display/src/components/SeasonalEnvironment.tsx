@@ -4,7 +4,10 @@ import type { SeasonalPresentation } from "../theme/seasonalTheme";
 
 import { AmbientWorld } from "./AmbientWorld";
 
+import type { ControlPresentation } from "../types/state";
+
 interface SeasonalEnvironmentProps {
+  control?: ControlPresentation["environment"];
   retreat?: boolean;
   night?: boolean;
   mode: string;
@@ -278,7 +281,7 @@ function WinterEnvironment({ fireworks }: { fireworks: boolean }) {
   );
 }
 
-export const SeasonalEnvironment = memo(function SeasonalEnvironment({ mode, presentation, retreat = false, night = false }: SeasonalEnvironmentProps) {
+export const SeasonalEnvironment = memo(function SeasonalEnvironment({ mode, presentation, retreat = false, night = false, control }: SeasonalEnvironmentProps) {
   const subtle = SUBTLE_MODES.has(mode);
   const event = presentation.event;
   let content;
@@ -300,7 +303,9 @@ export const SeasonalEnvironment = memo(function SeasonalEnvironment({ mode, pre
   return (
     <div
       className={`seasonal-environment seasonal-environment--${subtle ? "subtle" : "immersive"} environment-${event ?? presentation.season}`}
-      data-intensity={retreat ? "retreat" : ["gaming", "matchday", "news"].includes(mode) ? "minimal" : subtle ? "reduced" : night || mode === "night" ? "calm" : "full"}
+      data-control-enabled={control?.enabled}
+      data-control-motion={control?.reduced_motion || control?.animations === "off" ? "off" : control?.animations}
+      data-intensity={retreat ? "retreat" : control?.intensity && control.intensity !== "auto" ? control.intensity : control?.enabled === "on" ? "full" : ["gaming", "matchday", "news"].includes(mode) ? "minimal" : subtle ? "reduced" : night || mode === "night" ? "calm" : "full"}
       data-night={night || mode === "night"}
       data-season={presentation.season}
       data-seasonal-event={event ?? undefined}
@@ -310,4 +315,4 @@ export const SeasonalEnvironment = memo(function SeasonalEnvironment({ mode, pre
       {content}
     </div>
   );
-}, (before, after) => before.mode === after.mode && before.presentation.id === after.presentation.id && before.retreat === after.retreat && before.night === after.night);
+}, (before, after) => before.mode === after.mode && before.presentation.id === after.presentation.id && before.retreat === after.retreat && before.night === after.night && JSON.stringify(before.control) === JSON.stringify(after.control));

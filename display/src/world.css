@@ -63,3 +63,10 @@
   .world-walker { opacity: 1; }
   .world-plane { display: none; }
 }
+/* Control previews arrive over the ordinary state WebSocket. Safety retreat wins. */
+.seasonal-environment[data-control-enabled="off"] { display: none; }
+.seasonal-environment[data-control-motion="on"]:not([data-intensity="retreat"]) * { animation-play-state: running; }
+.seasonal-environment[data-control-motion="off"] *,
+.seasonal-environment[data-control-motion="off"] *::before,
+.seasonal-environment[data-control-motion="off"] *::after { animation: none !important; }
+.control-indicator { position: fixed; z-index: 8; bottom: 3.3rem; left: 50%; transform: translateX(-50%); padding: .3rem .7rem; border: 1px solid var(--warning); color: var(--text); background: var(--surface); font: .72rem var(--font-mono); }

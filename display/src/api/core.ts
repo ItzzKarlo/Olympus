@@ -490,6 +490,7 @@ export function parseStateMessage(rawMessage: string): OlympusState | null {
     football: (value.football as FootballState | null | undefined) ?? null,
     news: (value.news as NewsState | null | undefined) ?? null,
     live_events: (value.live_events as LiveEvent[] | undefined) ?? [],
+    control: isRecord(value.control) && value.control.active === true && isRecord(value.control.environment) ? value.control as unknown as OlympusState["control"] : null,
     time_policy: (value.time_policy as TimePolicyState | undefined) ?? {
       is_night: false,
       period_started_at: null,

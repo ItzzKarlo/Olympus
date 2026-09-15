@@ -6,6 +6,10 @@ After=network.target
 Type=simple
 User=olympus
 Group=olympus
+SupplementaryGroups=systemd-journal
+RuntimeDirectory=olympus-control
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=restart
 WorkingDirectory=/opt/olympus/current/core
 Environment=OLYMPUS_CONFIG=/etc/olympus/config.toml
 EnvironmentFile=-/etc/olympus/secrets.env
@@ -29,7 +33,7 @@ LockPersonality=true
 RestrictSUIDSGID=true
 CapabilityBoundingSet=
 AmbientCapabilities=
-ReadWritePaths=/var/lib/olympus /var/backups/olympus
+ReadWritePaths=/var/lib/olympus /var/backups/olympus /etc/olympus/managed-config /run/olympus-control
 
 # Olympus is one workload on shared Hermes infrastructure.
 CPUWeight=80
