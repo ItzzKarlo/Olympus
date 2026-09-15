@@ -468,6 +468,8 @@ export function applySeasonalTheme(
 
   return {
     ...base,
+    text: ["halloween", "christmas-eve", "new-years-eve"].includes(seasonal.event ?? "") ? "#F3F1EA" : "#242823",
+    panel: palette.surface,
     background: palette.background,
     surface: palette.surface,
     surfaceAlt: palette.surfaceAlt,

@@ -9,7 +9,7 @@ interface AmbientItem {
 export function AmbientStatus({ state }: { state: OlympusState }) {
   const items: AmbientItem[] = [];
   if (state.core_host) {
-    items.push({ id: "core", label: state.core_host.hostname, status: "up" });
+    items.push({ id: "core", label: "Hermes", status: "up" });
   }
   if (state.network) {
     items.push({ id: "internet", label: "Internet", status: state.network.internet.status });

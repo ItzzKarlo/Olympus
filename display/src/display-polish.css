@@ -1,0 +1,70 @@
+:root {
+  --font-display: "Avenir Next", "Segoe UI", "Helvetica Neue", "DejaVu Sans", sans-serif;
+  --font-mono: "SFMono-Regular", "Cascadia Mono", "Liberation Mono", monospace;
+  font-family: var(--font-display);
+}
+.olympus-display, .startup-screen { --logo-primary: var(--text); --logo-secondary: color-mix(in srgb, var(--text) 70%, var(--accent)); }
+.brand { color: var(--logo-primary); }
+.brand__mark { width: 3.2rem; height: 3.2rem; filter: none; }
+.brand strong { font-size: 1.25rem; font-weight: 600; letter-spacing: .19em; text-transform: uppercase; }
+.brand span { color: var(--muted); font-size: .72rem; letter-spacing: .15em; }
+.eyebrow { font-family: var(--font-mono); font-size: clamp(.75rem, .85vw, .95rem); letter-spacing: .14em; font-weight: 500; }
+/* Equal reserved wings keep the center invariant under optional content changes. */
+.scene--ambient-idle .ambient-idle-stage {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2.2fr) minmax(0, 1fr);
+  grid-template-rows: minmax(24rem, auto) auto auto;
+  gap: 2rem clamp(1.5rem, 3vw, 4rem);
+  width: 100%; padding: clamp(2rem, 4vh, 4rem) 0 8rem;
+}
+.scene--ambient-idle .ambient-idle-hero { grid-column: 2; grid-row: 1; width: 100%; justify-items: center; text-align: center; gap: 2rem; }
+.ambient-side { min-width: 0; align-self: center; grid-row: 1; }
+.ambient-side--left { grid-column: 1; }
+.ambient-side--right { grid-column: 3; }
+.ambient-clock { width: 100%; }
+.ambient-clock__time { font-family: var(--font-display); font-size: clamp(5rem, 10.5vw, 13.5rem); font-weight: 300; letter-spacing: -.065em; line-height: 1; padding-right: .065em; }
+.ambient-clock__date { margin-left: 0; font-weight: 400; font-size: clamp(1.15rem, 1.65vw, 2rem); color: var(--idle-secondary-text); }
+.ambient-weather { width: min(100%, 34rem); justify-self: center; }
+.ambient-weather__current, .ambient-weather__details { justify-content: center; }
+.ambient-weather__current > strong { font-weight: 400; letter-spacing: -.045em; font-size: clamp(3rem, 4vw, 5rem); }
+.ambient-weather__current > div { text-align: left; }
+.ambient-weather__current small, .ambient-weather__tomorrow { font-size: clamp(.8rem, .9vw, 1rem); letter-spacing: .025em; }
+.ambient-next { padding: 1.3rem 0; border-left: 0; border-top: 1px solid var(--line); }
+.ambient-next > strong, .ambient-next--now > strong { font-size: clamp(1.4rem, 2.1vw, 2.7rem); font-weight: 450; line-height: 1.15; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.ambient-next--now { transform: none; }
+.ambient-side .ambient-football { width: 100%; margin: 0; }
+.scene--ambient-idle .ambient-news { grid-column: 1 / -1; grid-row: 2; }
+.scene--ambient-idle .ambient-calendar { grid-column: 1 / -1; grid-row: 3; }
+.scene--ambient-idle .ambient-news li strong { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.scene--ambient-idle :is(.ambient-news li small, .ambient-football small, .ambient-football > span),
+.scene--ambient-idle > .ambient-status > span, .idle-agenda li small, .idle-agenda li > span { font-size: clamp(.78rem, .82vw, .95rem); }
+.hermes-health { font-size: clamp(.75rem, .85vw, 1rem); background: var(--surface); }
+.seasonal-layer__badge { font-size: .75rem; opacity: 1; backdrop-filter: none; }
+.seasonal-layer__item, .seasonal-layer__halo { display: none; }
+.olympus-display > .particle-field { display: none; }
+@media (max-width: 1000px) {
+  .scene--ambient-idle .ambient-idle-stage { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto; padding-bottom: 5rem; }
+  .scene--ambient-idle .ambient-idle-hero { grid-column: 1 / -1; grid-row: 1; }
+  .ambient-side { grid-row: 2; }
+  .ambient-side--left { grid-column: 1; }
+  .ambient-side--right { grid-column: 2; }
+  .scene--ambient-idle .ambient-news { grid-row: 3; }
+  .scene--ambient-idle .ambient-calendar { grid-row: 4; }
+  .ambient-clock__time { font-size: clamp(5rem, 18vw, 10rem); }
+}
+@media (max-width: 600px) {
+  .scene--ambient-idle .ambient-idle-stage { grid-template-columns: minmax(0, 1fr); }
+  .ambient-side--right { grid-column: 1; grid-row: 3; }
+  .scene--ambient-idle .ambient-news { grid-row: 4; }
+  .scene--ambient-idle .ambient-calendar { grid-row: 5; }
+  .ambient-side:empty { display: none; }
+}
+.brand__mark { border: 0; border-radius: 0; box-shadow: none; }
+.hermes-health { backdrop-filter: none; flex-wrap: wrap; }
+.seasonal-layer { z-index: 3; }
+.connection-status { font-size: clamp(.75rem, .8vw, .95rem); }
+/* A common readable floor for secondary information across focused modes. */
+.night-tomorrow li time, .night-tomorrow li small, .news-story footer span,
+.news-story footer time, .news-attribution, .ambient-source-stale {
+  font-family: var(--font-mono); font-size: .8rem; letter-spacing: .045em;
+  color: var(--muted); line-height: 1.5;
+}

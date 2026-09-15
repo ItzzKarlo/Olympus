@@ -115,25 +115,30 @@ export function IdleMode({ connectionStatus, now, state }: IdleModeProps) {
           ) : null}
         </div>
 
-        {upcoming ? (
-          <section className={`ambient-next ambient-next--${urgency}`} aria-label="Next calendar event">
-            <p className="eyebrow">{upcoming.status === "ongoing" ? "Happening now" : "Next"}</p>
-            <strong>{upcoming.title}</strong>
-            <div>
-              <time dateTime={upcoming.start ?? upcoming.start_date ?? undefined}>
-                {formatEventTime(upcoming.start, upcoming.all_day, state.timezone)}
-              </time>
-              <span>{upcoming.all_day ? upcoming.calendar_name : formatRelativeEvent(upcoming.start, upcoming.end, upcoming.status, now)}</span>
-            </div>
-          </section>
-        ) : null}
+        <aside className="ambient-side ambient-side--left">
+          {upcoming ? (
+            <section className={`ambient-next ambient-next--${urgency}`} aria-label="Next calendar event">
+              <p className="eyebrow">{upcoming.status === "ongoing" ? "Happening now" : "Next"}</p>
+              <strong>{upcoming.title}</strong>
+              <div>
+                <time dateTime={upcoming.start ?? upcoming.start_date ?? undefined}>
+                  {formatEventTime(upcoming.start, upcoming.all_day, state.timezone)}
+                </time>
+                <span>{upcoming.all_day ? upcoming.calendar_name : formatRelativeEvent(upcoming.start, upcoming.end, upcoming.status, now)}</span>
+              </div>
+            </section>
+          ) : null}
 
-        <NextMatchAmbient
-          match={state.football?.next_match ?? null}
-          now={now}
-          trackedTeamId={state.football?.tracked_team.id ?? ""}
-          timezone={state.timezone}
-        />
+        </aside>
+        <aside className="ambient-side ambient-side--right">
+          <NextMatchAmbient
+            match={state.football?.next_match ?? null}
+            now={now}
+            trackedTeamId={state.football?.tracked_team.id ?? ""}
+            timezone={state.timezone}
+          />
+
+        </aside>
 
         {state.news?.available ? <AmbientNews now={now} stories={state.news.ambient} /> : null}
 

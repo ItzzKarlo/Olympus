@@ -96,12 +96,8 @@ export default function App() {
       data-seasonal-event={seasonal.event ?? undefined}
       style={sceneStyle(theme)}
     >
-      <ParticleField
-        key={`${state.mode}:${state.gaming?.game.id ?? ""}:${state.football?.matchday?.phase ?? ""}:${state.weather?.current?.condition ?? ""}:${state.time_policy.is_night}:${seasonal.id}`}
-        theme={theme.particles}
-      />
       <SeasonalLayer presentation={seasonal} />
-      <SeasonalEnvironment mode={state.mode} presentation={seasonal} />
+      <SeasonalEnvironment mode={state.mode} presentation={seasonal} night={state.time_policy.is_night} retreat={state.alerts.length > 0} />
       <div key={state.mode} className="scene-transition">
         {scene}
       </div>

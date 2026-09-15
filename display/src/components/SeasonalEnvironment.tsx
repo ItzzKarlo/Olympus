@@ -1,8 +1,12 @@
-import type { CSSProperties } from "react";
+import { memo, type CSSProperties } from "react";
 
 import type { SeasonalPresentation } from "../theme/seasonalTheme";
 
+import { AmbientWorld } from "./AmbientWorld";
+
 interface SeasonalEnvironmentProps {
+  retreat?: boolean;
+  night?: boolean;
   mode: string;
   presentation: SeasonalPresentation;
 }
@@ -16,10 +20,10 @@ const CHRISTMAS_EVENTS = new Set([
 
 const SUBTLE_MODES = new Set(["development", "gaming", "matchday", "media", "news"]);
 
-const SNOWFLAKES = Array.from({ length: 42 }, (_, index) => index);
-const LEAVES = Array.from({ length: 28 }, (_, index) => index);
-const PETALS = Array.from({ length: 18 }, (_, index) => index);
-const BATS = Array.from({ length: 7 }, (_, index) => index);
+const SNOWFLAKES = Array.from({ length: 24 }, (_, index) => index);
+const LEAVES = Array.from({ length: 12 }, (_, index) => index);
+const PETALS = Array.from({ length: 10 }, (_, index) => index);
+const BATS = Array.from({ length: 3 }, (_, index) => index);
 const TOP_LIGHTS = Array.from({ length: 25 }, (_, index) => index);
 const SIDE_LIGHTS = Array.from({ length: 10 }, (_, index) => index);
 const ORNAMENTS = Array.from({ length: 14 }, (_, index) => index);
@@ -58,15 +62,6 @@ function SnowLayer({ dense = false }: { dense?: boolean }) {
 
 function Snowbanks() {
   return <div className="season-env__snowbanks" aria-hidden="true" />;
-}
-
-function BareWinterTrees() {
-  return (
-    <>
-      <div className="winter-tree winter-tree--left"><i /><i /><i /><i /></div>
-      <div className="winter-tree winter-tree--right"><i /><i /><i /><i /></div>
-    </>
-  );
 }
 
 function Fireworks() {
@@ -140,7 +135,6 @@ function ChristmasEnvironment() {
       <div className="season-env__winter-glow" />
       <ChristmasLights />
       <SnowLayer dense />
-      <BareWinterTrees />
       <ChristmasTree />
       <Snowman />
       <div className="christmas-gifts" aria-hidden="true">
@@ -193,7 +187,7 @@ function HalloweenEnvironment() {
               "--bat-duration": `${12 + seeded(index, 23) * 13}s`,
               "--bat-scale": 0.65 + seeded(index, 24) * 0.85,
             })}
-          >⌁</span>
+          ><svg viewBox="0 0 40 20" width="40" height="20"><path d="M20 9 15 2l-2 4L0 0l5 14 8-3 7 9 7-9 8 3L40 0 27 6l-2-4Z" fill="currentColor" /></svg></span>
         ))}
       </div>
       <div className="halloween-fence" aria-hidden="true" />
@@ -206,25 +200,10 @@ function HalloweenEnvironment() {
   );
 }
 
-function AutumnTree({ side }: { side: "left" | "right" }) {
-  return (
-    <div className={`autumn-tree autumn-tree--${side}`} aria-hidden="true">
-      <span className="autumn-tree__trunk" />
-      <span className="autumn-tree__branch autumn-tree__branch--one" />
-      <span className="autumn-tree__branch autumn-tree__branch--two" />
-      <span className="autumn-tree__crown autumn-tree__crown--one" />
-      <span className="autumn-tree__crown autumn-tree__crown--two" />
-      <span className="autumn-tree__crown autumn-tree__crown--three" />
-    </div>
-  );
-}
-
 function AutumnEnvironment({ stMartin }: { stMartin: boolean }) {
   return (
     <>
       <div className="autumn-haze" aria-hidden="true" />
-      <AutumnTree side="left" />
-      <AutumnTree side="right" />
       <div className="leaf-gusts" aria-hidden="true">
         {LEAVES.map((index) => (
           <span
@@ -292,14 +271,14 @@ function WinterEnvironment({ fireworks }: { fireworks: boolean }) {
     <>
       <div className="season-env__winter-glow" />
       <SnowLayer />
-      <BareWinterTrees />
+      <Snowman />
       <Snowbanks />
       {fireworks ? <Fireworks /> : null}
     </>
   );
 }
 
-export function SeasonalEnvironment({ mode, presentation }: SeasonalEnvironmentProps) {
+export const SeasonalEnvironment = memo(function SeasonalEnvironment({ mode, presentation, retreat = false, night = false }: SeasonalEnvironmentProps) {
   const subtle = SUBTLE_MODES.has(mode);
   const event = presentation.event;
   let content;
@@ -321,11 +300,14 @@ export function SeasonalEnvironment({ mode, presentation }: SeasonalEnvironmentP
   return (
     <div
       className={`seasonal-environment seasonal-environment--${subtle ? "subtle" : "immersive"} environment-${event ?? presentation.season}`}
+      data-intensity={retreat ? "retreat" : ["gaming", "matchday", "news"].includes(mode) ? "minimal" : subtle ? "reduced" : night || mode === "night" ? "calm" : "full"}
+      data-night={night || mode === "night"}
       data-season={presentation.season}
       data-seasonal-event={event ?? undefined}
       aria-hidden="true"
     >
+      <AmbientWorld presentation={presentation} />
       {content}
     </div>
   );
-}
+}, (before, after) => before.mode === after.mode && before.presentation.id === after.presentation.id && before.retreat === after.retreat && before.night === after.night);

@@ -1,0 +1,65 @@
+/* All scenery shares one stacking context below scene-transition and event layers. */
+.seasonal-environment {
+  --world-bark: #756653; --world-leaf: #7d966b; --world-leaf-light: #a1b382;
+  --world-house: #d4c8b3; --world-roof: #7d8078; --world-window: #edcf91;
+  --world-distant: #b6bda5; --world-ground: #c6ceae; --world-path: #e0d7c4;
+  --world-cloud: #fff9ec; --world-coat: #6f8585;
+  opacity: 1;
+}
+.seasonal-environment[data-season="autumn"] {
+  --world-leaf: #ad7547; --world-leaf-light: #c79855; --world-distant: #c3b29a;
+  --world-ground: #d2bf9b; --world-path: #e4d5bd; --world-coat: #796b52;
+}
+.seasonal-environment[data-season="winter"],
+.seasonal-environment:is(.environment-advent, .environment-christmas, .environment-christmas-eve, .environment-st-nicholas) {
+  --world-leaf: #9badae; --world-leaf-light: #e2eaf0; --world-distant: #bacbd2;
+  --world-ground: #dde6e9; --world-path: #c4d3d9; --world-house: #c5c6bf; --world-roof: #74838c;
+}
+.seasonal-environment[data-season="spring"] { --world-leaf: #a7b88c; --world-leaf-light: #d4b1bf; }
+.seasonal-environment:is([data-night="true"], .environment-halloween, .environment-christmas-eve, .environment-new-years-eve) {
+  --world-distant: #303c42; --world-ground: #3b4a48; --world-path: #58625e;
+  --world-leaf: #354d46; --world-leaf-light: #526552; --world-house: #646a60;
+  --world-roof: #3a4344; --world-cloud: #788489; --world-bark: #8a8271;
+}
+.ambient-world { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* The information area gets a static veil, not an animated blur. */
+.seasonal-environment::after { position: absolute; inset: 0; content: ""; background: radial-gradient(ellipse at 50% 37%, var(--background) 8%, color-mix(in srgb, var(--background) 94%, transparent) 28%, transparent 70%); }
+.world-roof-snow { display: none; }
+:is([data-season="winter"], .environment-advent) .world-roof-snow { display: block; }
+.world-clouds { opacity: .45; animation: world-cloud 137s ease-in-out infinite alternate; }
+.world-smoke { opacity: .4; animation: world-smoke 13s ease-out infinite; }
+.world-walker { animation: world-walk 173s linear infinite; }
+.world-squirrel { animation: world-squirrel 79s ease-in-out infinite; }
+.world-plane { opacity: 0; animation: world-plane 241s linear 31s infinite; }
+.world-birds { opacity: .6; animation: world-birds 113s ease-in-out infinite; }
+@keyframes world-cloud { to { transform: translateX(75px); } }
+@keyframes world-smoke { 0% { opacity: 0; transform: translateY(3px); } 30% { opacity: .4; } 100% { opacity: 0; transform: translate(10px,-24px); } }
+@keyframes world-walk { 0%, 12% { opacity: 0; transform: translateX(340px); } 15% { opacity: 1; } 40% { opacity: 1; } 44%, 100% { opacity: 0; transform: translateX(-570px); } }
+@keyframes world-squirrel { 0%, 65% { transform: translateX(0); } 70% { transform: translate(70px,-3px); } 74%, 93% { transform: translate(110px,0); } 100% { transform: translateX(0); } }
+@keyframes world-plane { 0%, 84% { opacity: 0; transform: translate(-80px,140px); } 85% { opacity: .45; } 99% { opacity: .45; } 100% { opacity: 0; transform: translate(1700px,90px); } }
+@keyframes world-birds { 0%, 70%, 100% { transform: translateX(0); } 85% { transform: translate(-65px,-18px); } }
+/* Keep useful existing edge props; replace duplicate corner trees with the world. */
+.autumn-tree, .winter-tree, .summer-cloud, .spring-branch { display: none; }
+.summer-fireflies { display: none; }
+[data-night="true"] .summer-fireflies { display: block; }
+[data-night="true"] .summer-sun { opacity: .12; }
+.halloween-fog { filter: none; opacity: .2; }
+.halloween-fog i { background: radial-gradient(ellipse, #b4a9ba55, transparent 70%); }
+.bat-flight span { color: #b5a5bc; }
+.firework { animation-duration: 29s; }
+.firework--two { animation-delay: -11s; }
+.firework--three { left: 9%; top: 36%; animation-delay: -19s; }
+@keyframes fireworks-pulse { 0%, 85%, 100% { opacity: 0; transform: scale(.2); } 88% { opacity: .8; } 94% { opacity: .1; transform: scale(1.3); } 96% { opacity: 0; transform: scale(1.4); } }
+.bulb { animation-name: world-bulb; }
+@keyframes world-bulb { from { opacity: .5; } to { opacity: .95; } }
+.seasonal-environment[data-intensity="calm"] { opacity: .65; }
+.seasonal-environment[data-intensity="reduced"] { opacity: .25; }
+.seasonal-environment[data-intensity="minimal"] { opacity: .12; }
+.seasonal-environment[data-intensity="retreat"] { opacity: .035; }
+.seasonal-environment:is([data-intensity="reduced"], [data-intensity="minimal"], [data-intensity="retreat"]) * { animation-play-state: paused; }
+.seasonal-environment:is([data-intensity="reduced"], [data-intensity="minimal"], [data-intensity="retreat"]) :is(.world-walker, .world-plane, .bat-flight, .leaf-gusts, .season-env__snow, .spring-petals) { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .seasonal-environment *, .seasonal-environment *::before, .seasonal-environment *::after { animation: none !important; }
+  .world-walker { opacity: 1; }
+  .world-plane { display: none; }
+}
