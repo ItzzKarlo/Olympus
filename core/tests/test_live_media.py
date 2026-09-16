@@ -66,3 +66,20 @@ class Arbitration(unittest.TestCase):
         self.assertIs(store.get([a], now), cloud)
         a.media_sessions = [local]
         self.assertEqual(store.get([a], now).source, 'local')
+
+    def test_local_pause_beats_same_device_but_not_phone_and_enriches_exact_track(self):
+        from olympus_core.models.media import MediaAlbum
+        now = datetime.now(timezone.utc)
+        local = MediaState(provider="spotify", playback_status="playing", is_playing=True, observed_at=now,
+            track=MediaTrack(id="spotify:track:abc", title="Song"))
+        agent = SimpleNamespace(agent_id="desktop", hostname="Desktop", online=True, media_sessions=[local])
+        cloud = MediaState(is_playing=True, device="Desktop", observed_at=now,
+            track=MediaTrack(id="abc", title="Song", album=MediaAlbum(name="Album", artwork_url="https://example.test/art")))
+        store = MediaStateStore()
+        store.update(cloud)
+        selected = store.get([agent], now)
+        self.assertEqual(selected.track.album.artwork_url, "https://example.test/art")
+        agent.media_sessions = [local.model_copy(update={"is_playing": False, "playback_status": "paused"})]
+        self.assertFalse(store.get([agent], now).is_playing)
+        store.update(cloud.model_copy(update={"device": "Phone"}))
+        self.assertEqual(store.get([agent], now).device, "Phone")

@@ -53,9 +53,9 @@ provided. Metadata-derived IDs are explicitly prefixed `metadata:` when an OS
 supplies no stable track ID. No album, artist, or scorer metadata is synthesized.
 
 Fresh confirmed local playing wins; an already selected playing device remains
-selected while fresh. Initial ties use Agent ID/session ID order. Paused/stopped,
+selected while fresh. Initial ties use Agent ID/session ID order. A three-second disconnect grace applies only while the last local observation is fresh and no cloud playback is confirmed. Paused/stopped,
 unknown, unavailable, disconnected, or expired local sources cannot suppress
-confirmed remote playback. Core `[media]` defaults: `local_stale_seconds=15`,
+confirmed remote playback. A fresh pause overrides cloud playback only when its known device name matches the Agent device. Exact Spotify track identities permit cloud artwork/context/queue enrichment without replacing local timing. Core `[media]` defaults: `local_stale_seconds=15`,
 `cloud_stale_seconds=60`. Timestamp skew over two seconds into the future is
 rejected for local selection. There is no generic remote artwork proxy.
 
