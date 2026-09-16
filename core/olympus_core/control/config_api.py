@@ -17,6 +17,10 @@ from .redact import redact, SENSITIVE
 from .storage import atomic_write, read_private
 
 FIELDS = {
+    "media.local_stale_seconds": (int, float), "media.cloud_stale_seconds": (int, float),
+    "football.live_scores_confirmed": bool,
+    "news.presentation.global_cooldown_seconds": (int, float),
+    "news.presentation.minimum_dwell_seconds": (int, float),
     "night.enabled": bool, "night.weekday_start": str, "night.weekend_start": str, "night.end": str,
     "weather.enabled": bool, "weather.poll_minutes": (int, float),
     "calendar.enabled": bool, "calendar.poll_minutes": (int, float),

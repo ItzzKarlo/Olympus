@@ -25,10 +25,11 @@ JsonObject = Mapping[str, Any]
 
 
 class SpotifyError(RuntimeError):
-    def __init__(self, message: str, status_code: int | None = None, retry_after: float | None = None) -> None:
+    def __init__(self, message: str, status_code: int | None = None, retry_after: float | None = None, kind: str = "unavailable") -> None:
         super().__init__(message)
         self.status_code = status_code
         self.retry_after = retry_after
+        self.kind = kind
 
 
 def _object(value: Any) -> JsonObject:
@@ -197,12 +198,12 @@ class SpotifyApi:
                 follow_redirects=False,
             )
         except httpx.HTTPError as exc:
-            raise SpotifyError("Spotify authentication is unavailable") from exc
+            raise SpotifyError("Spotify authentication is unavailable", kind="timeout" if isinstance(exc, httpx.TimeoutException) else "network_error") from exc
         self._check_response(response, "authentication")
         try:
             payload = response.json()
         except ValueError as exc:
-            raise SpotifyError("Spotify authentication returned invalid JSON") from exc
+            raise SpotifyError("Spotify authentication returned invalid JSON", kind="invalid_json") from exc
         token = _text(_object(payload).get("access_token"))
         if token is None:
             raise SpotifyError("Spotify authentication response had no access token")
@@ -233,7 +234,7 @@ class SpotifyApi:
                 follow_redirects=False,
             )
         except httpx.HTTPError as exc:
-            raise SpotifyError("Spotify API is temporarily unavailable") from exc
+            raise SpotifyError("Spotify API is temporarily unavailable", kind="timeout" if isinstance(exc, httpx.TimeoutException) else "network_error") from exc
 
         if response.status_code == 401 and retry_auth:
             self._access_token = None
@@ -247,7 +248,7 @@ class SpotifyApi:
         try:
             value = response.json()
         except ValueError as exc:
-            raise SpotifyError("Spotify API returned invalid JSON") from exc
+            raise SpotifyError("Spotify API returned invalid JSON", kind="invalid_json") from exc
         if not isinstance(value, Mapping):
             raise SpotifyError("Spotify API returned an invalid response")
         return value
@@ -281,7 +282,7 @@ class SpotifyApi:
         playback = await self._request("/me/player", allow_empty=True)
         observed_at = datetime.now(timezone.utc)
         if playback is None:
-            return MediaState(observed_at=observed_at)
+            return MediaState(observed_at=observed_at, playback_status="stopped")
 
         track = normalize_track(playback.get("item"))
         context = await self._resolve_context(playback.get("context"))
@@ -344,7 +345,7 @@ class SpotifyCollector:
         except Exception as exc:
             self._consecutive_failures += 1
             self._retry_after = exc.retry_after or 0.0 if isinstance(exc, SpotifyError) else 0.0
-            self.health = f"http_{exc.status_code}" if isinstance(exc, SpotifyError) and exc.status_code else "unavailable"
+            self.health = f"http_{exc.status_code}" if isinstance(exc, SpotifyError) and exc.status_code else exc.kind if isinstance(exc, SpotifyError) else "unavailable"
             if current_time - self._last_error_log_at >= 30:
                 logger.warning("Spotify unavailable (%s)", self.health)
                 self._last_error_log_at = current_time

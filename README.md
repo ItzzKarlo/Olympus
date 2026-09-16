@@ -360,8 +360,8 @@ OLYMPUS_SPOTIFY_ENABLED=true
 OLYMPUS_SPOTIFY_CLIENT_ID=your_client_id
 OLYMPUS_SPOTIFY_CLIENT_SECRET=your_client_secret
 OLYMPUS_SPOTIFY_REFRESH_TOKEN=your_refresh_token
-OLYMPUS_SPOTIFY_POLL_SECONDS=5
-OLYMPUS_SPOTIFY_ACTIVE_POLL_SECONDS=1.5
+OLYMPUS_SPOTIFY_POLL_SECONDS=15
+OLYMPUS_SPOTIFY_ACTIVE_POLL_SECONDS=5
 ```
 
 Start Core with the environment file:
@@ -376,8 +376,8 @@ The available settings are:
 - `OLYMPUS_SPOTIFY_CLIENT_ID` — Spotify application client ID
 - `OLYMPUS_SPOTIFY_CLIENT_SECRET` — Spotify application client secret
 - `OLYMPUS_SPOTIFY_REFRESH_TOKEN` — user authorization refresh token
-- `OLYMPUS_SPOTIFY_POLL_SECONDS` — inactive polling interval in seconds (default `5`)
-- `OLYMPUS_SPOTIFY_ACTIVE_POLL_SECONDS` — active-playback polling interval (default `1.5`)
+- `OLYMPUS_SPOTIFY_POLL_SECONDS` — inactive polling interval in seconds (default `15`)
+- `OLYMPUS_SPOTIFY_ACTIVE_POLL_SECONDS` — active-playback polling interval (default `5`)
 
 Credentials and tokens remain in the ignored `core/.env` file. If Spotify is
 temporarily unreachable, Core keeps the last good playback state briefly and
@@ -1202,3 +1202,5 @@ physical display power control, or a Web administration surface. FPS remains an
 optional external Windows input, and unavailable metrics are omitted. macOS and
 Windows CPU temperature remain unavailable unless a future reliable local
 provider is added.
+
+See [Live integration reliability and limitations](docs/live-integrations-1.1.md) for local media setup, News interruption policy, and football subscription requirements.

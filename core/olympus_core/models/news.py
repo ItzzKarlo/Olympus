@@ -86,6 +86,7 @@ class NewsFeedHealth(BaseModel):
     last_error: str | None = None
     last_article_at: datetime | None = None
     consecutive_failures: int = 0
+    retry_at: datetime | None = None
     stale: bool = False
 
 

@@ -5,10 +5,11 @@ from olympus_core.models.media import MediaState
 class MediaStateStore:
     """Cloud snapshot plus deterministic selection of authenticated Agent observations."""
 
-    def __init__(self, local_stale_seconds: float = 15.0) -> None:
+    def __init__(self, local_stale_seconds: float = 15.0, cloud_stale_seconds: float = 60.0) -> None:
         self._state: MediaState | None = None
         self._selected: tuple[str, str] | None = None
         self.local_stale_seconds = local_stale_seconds
+        self.cloud_stale_seconds = cloud_stale_seconds
 
     def get(self, agents=(), now: datetime | None = None) -> MediaState | None:
         current = now or datetime.now(timezone.utc)
@@ -31,7 +32,7 @@ class MediaStateStore:
             return candidates[self._selected]
         self._selected = None
         state = self._state
-        if state and state.observed_at.tzinfo is not None and (current - state.observed_at).total_seconds() > 60:
+        if state and state.observed_at.tzinfo is not None and (current - state.observed_at).total_seconds() > self.cloud_stale_seconds:
             return state.model_copy(update={"is_playing": False, "available": False, "playback_status": "stale"})
         return state
 

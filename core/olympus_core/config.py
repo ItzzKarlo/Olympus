@@ -281,6 +281,12 @@ class SecuritySettings:
 
 
 @dataclass(frozen=True, slots=True)
+class MediaSettings:
+    local_stale_seconds: float = 15.0
+    cloud_stale_seconds: float = 60.0
+
+
+@dataclass(frozen=True, slots=True)
 class CoreSettings:
     timezone: str = DEFAULT_TIMEZONE
     server: ServerSettings = ServerSettings()
@@ -290,6 +296,7 @@ class CoreSettings:
     weather: WeatherSettings = WeatherSettings()
     calendar: CalendarSettings = CalendarSettings()
     night: NightSettings = NightSettings()
+    media: MediaSettings = MediaSettings()
     football: FootballSettings = FootballSettings()
     news: NewsSettings = NewsSettings()
     persistence: PersistenceSettings = PersistenceSettings()
@@ -450,6 +457,10 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
 
     return CoreSettings(
         timezone=timezone,
+        media=MediaSettings(
+            local_stale_seconds=_positive_float(str(_mapping(data.get("media")).get("local_stale_seconds", 15)), 15),
+            cloud_stale_seconds=_positive_float(str(_mapping(data.get("media")).get("cloud_stale_seconds", 60)), 60),
+        ),
         server=ServerSettings(
             host=str(server_data.get("host", "127.0.0.1")).strip() or "127.0.0.1",
             port=min(_positive_int(server_data.get("port"), 8_000), 65_535),

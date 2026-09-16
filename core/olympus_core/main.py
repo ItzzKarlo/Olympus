@@ -53,10 +53,10 @@ enrollment_repository = EnrollmentRepository(
 )
 incident_repository = IncidentRepository(database)
 news_memory_repository = NewsMemoryRepository(database)
-media_store = MediaStateStore()
+media_store = MediaStateStore(core_settings.media.local_stale_seconds, core_settings.media.cloud_stale_seconds)
 weather_store = WeatherStateStore()
 calendar_store = CalendarStateStore(core_settings.timezone)
-football_store = FootballStateStore()
+football_store = FootballStateStore(core_settings.football.live_stale_seconds, core_settings.football.unavailable_seconds)
 news_store = NewsStateStore()
 time_policy_service = TimePolicyService(core_settings.night, core_settings.timezone)
 monitoring_store = MonitoringStore()
@@ -212,6 +212,11 @@ async def lifespan(_app: FastAPI):
     else:
         logger.info("Spotify collector disabled")
 
+    state_service.integration_health = lambda: {
+        "spotify_cloud": collector.health if collector else "disabled" if not settings.enabled else "missing_credentials",
+        "local_media": {agent.agent_id: agent.media_health for agent in registry.get_all()},
+        "football_configuration": "configured" if core_settings.football.configured else "disabled" if not core_settings.football.enabled else "missing_configuration",
+    }
     weather_collector: WeatherCollector | None = None
     weather_task: asyncio.Task[None] | None = None
     if core_settings.weather.configured:

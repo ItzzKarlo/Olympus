@@ -249,6 +249,7 @@ class NewsEngine:
                     "last_error": None,
                     "stale": False,
                     "consecutive_failures": 0,
+                    "retry_at": None,
                     "last_article_at": max((a.published_at for a in result.articles if a.published_at and a.published_at <= current), default=health.last_article_at),
                 })
                 for article in result.articles:
@@ -260,6 +261,7 @@ class NewsEngine:
                 last_success = health.last_success_at
                 self._health[result.feed.id] = health.model_copy(update={
                     "last_error": result.error,
+                    "retry_at": result.retry_at,
                     "consecutive_failures": health.consecutive_failures + 1,
                     "stale": last_success is None or current - last_success > timedelta(seconds=self._settings.stale_seconds),
                 })
