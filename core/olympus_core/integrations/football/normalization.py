@@ -150,6 +150,8 @@ def normalize_fixture(value: Any, settings: FootballSettings) -> FootballMatch |
     competition_name = _text(league.get("name"))
     if fixture_id is None or kickoff is None or home is None or away is None or competition_name is None:
         return None
+    if settings.tracked_id not in {home.id, away.id}:
+        return None
     elapsed = _integer(status.get("elapsed"))
     extra = _integer(status.get("extra"))
     period = normalize_period(status.get("short"))
@@ -172,6 +174,8 @@ def normalize_event_type(event_type: Any, detail: Any) -> FootballEventType:
     category = (_text(event_type) or "").casefold()
     normalized_detail = (_text(detail) or "").casefold()
     if category == "goal":
+        if any(term in normalized_detail for term in ("cancelled", "canceled", "disallowed")):
+            return FootballEventType.VAR
         if "missed" in normalized_detail:
             return FootballEventType.MISSED_PENALTY
         if "own" in normalized_detail:

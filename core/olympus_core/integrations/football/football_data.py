@@ -10,6 +10,7 @@ from olympus_core.config import FootballSettings
 from olympus_core.integrations.football.base import FootballProviderError, FootballRateLimitError
 from olympus_core.models.football import (
     FootballClock,
+    FootballCapabilities,
     FootballCompetition,
     FootballEventType,
     FootballLineupPlayer,
@@ -117,6 +118,8 @@ def normalize_football_data_match(value: Any, settings: FootballSettings) -> Foo
     if match_id is None or kickoff is None or competition_name is None or home is None or away is None:
         return None
 
+    if settings.tracked_id not in {home.id, away.id}:
+        return None
     status_code = (_text(record.get("status")) or "").upper()
     minute = _integer(record.get("minute"))
     injury_time = _integer(record.get("injuryTime"))
@@ -364,6 +367,8 @@ class FootballDataProvider:
             raise FootballProviderError(
                 f"football-data upstream error {response.status_code} for team {self._settings.team_id}"
             )
+        if 300 <= response.status_code < 400:
+            raise FootballProviderError("football-data unexpected redirect")
         if response.status_code >= 400:
             raise FootballProviderError(
                 f"football-data request error {response.status_code} for team {self._settings.team_id}"
@@ -389,6 +394,7 @@ class FootballDataProvider:
         ]
         if values and not normalized:
             raise FootballProviderError("football-data returned malformed match records")
+        normalized = [(match, raw) for match, raw in normalized if now - timedelta(days=2) <= match.kickoff <= now + timedelta(days=90)]
         normalized.sort(key=lambda item: item[0].kickoff)
         matches = [item[0] for item in normalized]
         next_match = next(
@@ -418,6 +424,11 @@ class FootballDataProvider:
             _tracked_team(self._settings),
         )
         return ProviderFootballSnapshot(
+            provider="football-data",
+            capabilities=FootballCapabilities(fixtures=True, current_season=bool(matches) or None,
+                live_scores=self._settings.live_scores_confirmed, events=bool(raw_match and _mapping(raw_match).get("goals")) or None,
+                lineups=normalize_football_data_lineups(raw_match, match) is not None if match else None,
+                statistics=False),
             tracked_team=tracked_team,
             next_match=next_match,
             match=match,

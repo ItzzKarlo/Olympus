@@ -420,6 +420,8 @@ export interface MatchdayContext {
 }
 
 export interface FootballState {
+  capabilities?: { live_scores: boolean | null };
+  provider_status?: string;
   available: boolean;
   stale: boolean;
   observed_at: string;

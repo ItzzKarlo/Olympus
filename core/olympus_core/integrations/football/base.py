@@ -12,7 +12,9 @@ class FootballProvider(Protocol):
 
 
 class FootballProviderError(RuntimeError):
-    pass
+    def __init__(self, message: str, code: str = "provider_unavailable") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class FootballRateLimitError(FootballProviderError):

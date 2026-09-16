@@ -234,12 +234,13 @@ class ApiFootballProviderTests(unittest.IsolatedAsyncioTestCase):
             return httpx.Response(200, json={"errors": {}, "response": [raw_fixture("NS")]})
 
         provider = ApiFootballProvider(
-            replace(SETTINGS, season=2025),
+            replace(SETTINGS, season=2026),
             httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+            clock=lambda: datetime(2026, 8, 29, tzinfo=timezone.utc),
         )
         await provider.fetch()
 
-        self.assertEqual(requests[0].url.params["season"], "2025")
+        self.assertEqual(requests[0].url.params["season"], "2026")
 
 
 class FixtureFootballProviderTests(unittest.IsolatedAsyncioTestCase):

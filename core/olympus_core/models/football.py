@@ -262,7 +262,19 @@ class FootballMatchEvent(BaseModel):
     location: dict[str, float | None] | None = None
 
 
+class FootballCapabilities(BaseModel):
+    fixtures: bool | None = None
+    current_season: bool | None = None
+    live_scores: bool | None = None
+    events: bool | None = None
+    lineups: bool | None = None
+    statistics: bool | None = None
+
+
 class ProviderFootballSnapshot(BaseModel):
+    capabilities: FootballCapabilities = Field(default_factory=FootballCapabilities)
+    provider: str | None = None
+
     tracked_team: FootballTeam
     next_match: FootballMatch | None = None
     match: FootballMatch | None = None
@@ -295,6 +307,11 @@ class MatchdayContext(BaseModel):
 
 
 class FootballState(BaseModel):
+    provider: str | None = None
+    provider_status: str = "unknown"
+    capabilities: FootballCapabilities = Field(default_factory=FootballCapabilities)
+    last_success_at: datetime | None = None
+
     available: bool = True
     stale: bool = False
     observed_at: datetime

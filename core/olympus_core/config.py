@@ -132,6 +132,7 @@ class FootballSettings:
     timezone: str = DEFAULT_TIMEZONE
     api_key: str | None = None
     football_data_api_key: str | None = None
+    live_scores_confirmed: bool = False
     fixture_path: str | None = None
     season: int | None = None
     matchday: FootballMatchdaySettings = FootballMatchdaySettings()
@@ -501,6 +502,7 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
             weekend_days=_weekend_days(night_data.get("weekend_days")),
         ),
         football=FootballSettings(
+            live_scores_confirmed=football_data.get("live_scores_confirmed") is True,
             enabled=bool(football_data.get("enabled", False)),
             provider=football_provider,
             team_id=str(football_data.get("team_id", "157")).strip(),
