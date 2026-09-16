@@ -38,7 +38,7 @@ class RssNewsProvider:
             self._validators[feed.id] = (response.headers.get("ETag"), response.headers.get("Last-Modified"))
             return NewsFeedResult(feed=feed, observed_at=observed_at, articles=articles)
         except Exception as error:
-            return NewsFeedResult(feed=feed, observed_at=observed_at, error=str(error)[:240])
+            return NewsFeedResult(feed=feed, observed_at=observed_at, error=f"http_{error.response.status_code}" if isinstance(error, httpx.HTTPStatusError) else "parse_failure" if isinstance(error, ValueError) else "fetch_failure")
 
     async def fetch(self) -> list[NewsFeedResult]:
         return list(await asyncio.gather(*(self._fetch_feed(feed) for feed in self._settings.feeds)))

@@ -186,6 +186,7 @@ class NewsFeedSettings:
     trust: float = 1.0
     region: str | None = None
     topic: str | None = None
+    editorial_group: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,6 +195,8 @@ class NewsPresentationSettings:
     news_scene_seconds: float = 20.0
     major_scene_seconds: float = NEWS_PRESENTATION_MAX_SECONDS
     cooldown_seconds: float = 1_800.0
+    global_cooldown_seconds: float = 300.0
+    minimum_dwell_seconds: float = 10.0
     notable_threshold: float = 0.55
     important_threshold: float = 0.68
     major_threshold: float = 0.86
@@ -432,6 +435,7 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
                 trust=_bounded_float(feed.get("trust"), 1.0, 0.1, 2.0),
                 region=str(feed.get("region", "")).strip().upper() or None,
                 topic=topic,
+                editorial_group=str(feed.get("editorial_group", "")).strip() or None,
             ))
     raw_regions = news_data.get("local_regions", ["DE"])
     local_regions = tuple(dict.fromkeys(
@@ -608,6 +612,8 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
                         NEWS_PRESENTATION_MAX_SECONDS,
                     ),
                 ),
+                global_cooldown_seconds=_positive_float(str(news_presentation_data.get("global_cooldown_seconds", 300)), 300),
+                minimum_dwell_seconds=_positive_float(str(news_presentation_data.get("minimum_dwell_seconds", 10)), 10),
                 cooldown_seconds=_positive_float(
                     str(news_presentation_data.get("cooldown_minutes")) if news_presentation_data.get("cooldown_minutes") is not None else None,
                     30.0,

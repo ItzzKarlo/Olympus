@@ -1,5 +1,5 @@
 import calendar
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from html import unescape
 from html.parser import HTMLParser
@@ -27,7 +27,7 @@ TOPIC_KEYWORDS: dict[NewsTopic, tuple[str, ...]] = {
     NewsTopic.WEATHER: ("weather", "storm", "flood", "wildfire", "wetter", "sturm", "hochwasser"),
     NewsTopic.TRANSPORT: ("rail", "train", "airport", "transport", "verkehr", "bahn", "zug"),
     NewsTopic.SPORTS: ("football", "bundesliga", "champions league", "sport", "bayern munich", "fc bayern"),
-    NewsTopic.ENTERTAINMENT: ("film", "music", "television", "celebrity", "kino", "musik"),
+    NewsTopic.ENTERTAINMENT: ("film", "music", "television", "celebrity", "kino", "musik", "wwe", "wrestling"),
 }
 
 
@@ -132,7 +132,11 @@ def normalize_entry(entry: Any, feed: NewsFeedSettings, observed_at: datetime) -
     source = NewsSource(
         id=feed.id, name=feed.name, language=feed.language,
         region=feed.region, trust=feed.trust,
+        editorial_group=feed.editorial_group or urlsplit(feed.url).hostname,
     )
+    published = _published(entry)
+    if published is not None and published > observed_at + timedelta(minutes=5):
+        published = None
     try:
         return NewsArticle(
             id=sha256(identity.encode()).hexdigest()[:24],
@@ -141,7 +145,7 @@ def normalize_entry(entry: Any, feed: NewsFeedSettings, observed_at: datetime) -
             source=source,
             url=canonical,
             canonical_url=canonical,
-            published_at=_published(entry),
+            published_at=published,
             observed_at=observed_at,
             summary=clean_text(entry.get("summary") or entry.get("description"), limit=420),
             language=feed.language,
