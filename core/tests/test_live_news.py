@@ -45,3 +45,20 @@ class SceneTests(unittest.IsolatedAsyncioTestCase):
             state = await collector.poll_once(NOW + timedelta(seconds=1))
             self.assertIsNone(state.presentation)
             self.assertEqual(ModeResolver().resolve([], None, news=state).mode.value, 'idle')
+
+    async def test_major_escalation_waits_for_minimum_dwell_then_presents(self):
+        from olympus_core.models.news import NewsTopic
+        title = "Emergency rail network disruption affects southern Germany today"
+        items = [article(feed, title, summary=f"Independent report {feed.id}", topic=NewsTopic.TRANSPORT) for feed in FEEDS]
+        settings = replace(SETTINGS, presentation=replace(SETTINGS.presentation, important_threshold=.65, major_threshold=.80))
+        collector = NewsCollector(settings, StubProvider([
+            [result(FEEDS[0], items[0])], [result(FEEDS[1], items[1])],
+            [result(FEEDS[2], items[2])], [result(FEEDS[2], items[2])],
+        ]), lambda s: None, lambda e: None)
+        await collector.poll_once(NOW)
+        initial = await collector.poll_once(NOW + timedelta(seconds=1))
+        waiting = await collector.poll_once(NOW + timedelta(seconds=2))
+        escalated = await collector.poll_once(NOW + timedelta(seconds=11))
+        self.assertEqual(initial.presentation.level, NewsImportanceLevel.IMPORTANT)
+        self.assertEqual(waiting.presentation.level, NewsImportanceLevel.IMPORTANT)
+        self.assertEqual(escalated.presentation.level, NewsImportanceLevel.MAJOR)

@@ -181,7 +181,13 @@ class NewsCollector:
                 ((key, value) for key, value in self._presented.items() if current - value[1] < timedelta(days=7)),
                 key=lambda item: item[1][1],
             )[-512:])
-            candidate = self._candidate(escalations, current) if state.available and not state.stale else None
+            pending = list(escalations)
+            if self._state.presentation is not None:
+                pending.extend(cluster for cluster in state.top_stories
+                    if cluster.id == self._state.presentation.story_id
+                    and LEVEL_RANK[cluster.importance.level] > LEVEL_RANK[self._state.presentation.level]
+                    and cluster not in pending)
+            candidate = self._candidate(pending, current) if state.available and not state.stale else None
             if self._state.presentation is not None and self._state.presentation.ends_at > current:
                 active = next(
                     (cluster for cluster in state.top_stories if cluster.id == self._state.presentation.story_id),
