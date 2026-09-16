@@ -1,5 +1,5 @@
 from datetime import datetime
-from olympus_core.models.football import FootballState
+from olympus_core.models.football import FootballResult, FootballState
 
 
 class FootballStateStore:
@@ -18,7 +18,7 @@ class FootballStateStore:
         age = (now - state.observed_at).total_seconds()
         if age <= self.stale_seconds or state.matchday is None:
             return state
-        context = state.matchday.model_copy(update={"stale": True, "result": "unknown"})
+        context = state.matchday.model_copy(update={"stale": True, "result": FootballResult.UNKNOWN})
         expired = age > self.unavailable_seconds
         return state.model_copy(update={"stale": True, "available": state.available and not expired,
             "matchday": None if expired else context})

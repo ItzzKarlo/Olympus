@@ -166,26 +166,26 @@ Build on Zeus:
 cd ~/dev/Olympus
 scripts/hermes/build-release.sh --skip-node-install
 cd dist/hermes
-sha256sum -c olympus-1.0.9-hermes-arm64.tar.gz.sha256
+sha256sum -c olympus-1.1.0-hermes-arm64.tar.gz.sha256
 ```
 
 Transfer to Hermes:
 
 ```bash
-ssh karlo@hermes.karmtin 'mkdir -p ~/olympus-deploy/v1.0.9'
-scp olympus-1.0.9-hermes-arm64.tar.gz \
-    olympus-1.0.9-hermes-arm64.tar.gz.sha256 \
-    karlo@hermes.karmtin:~/olympus-deploy/v1.0.9/
+ssh karlo@hermes.karmtin 'mkdir -p ~/olympus-deploy/v1.1.0'
+scp olympus-1.1.0-hermes-arm64.tar.gz \
+    olympus-1.1.0-hermes-arm64.tar.gz.sha256 \
+    karlo@hermes.karmtin:~/olympus-deploy/v1.1.0/
 ```
 
 Install on Hermes:
 
 ```bash
 ssh karlo@hermes.karmtin
-cd ~/olympus-deploy/v1.0.9
-sha256sum -c olympus-1.0.9-hermes-arm64.tar.gz.sha256
-tar -xzf olympus-1.0.9-hermes-arm64.tar.gz
-cd olympus-1.0.9
+cd ~/olympus-deploy/v1.1.0
+sha256sum -c olympus-1.1.0-hermes-arm64.tar.gz.sha256
+tar -xzf olympus-1.1.0-hermes-arm64.tar.gz
+cd olympus-1.1.0
 sudo ./scripts/hermes/install.sh --dry-run --restart-kiosk
 sudo ./scripts/hermes/install.sh --restart-kiosk
 ```
