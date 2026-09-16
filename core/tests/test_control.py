@@ -174,6 +174,18 @@ class ControlTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/control/releases').json()['data']['version'],(ROOT/'VERSION').read_text().strip())
         r=self.client.get('/api/control/diagnostics');self.assertEqual(r.status_code,200);self.assertNotIn(PASSWORD,r.text)
 
+    def test_integration_failure_simulations_reset_to_real_state(self):
+        self.login()
+        real_before = self.control.state_service.current().model_dump()
+        for kind, variant in (("media", "outage"), ("media", "local"), ("news", "recovery"), ("football", "score-correction"), ("football", "outage")):
+            from olympus_core.control.overrides import OverrideDocument, OverrideRequest
+            from olympus_core.control.simulation import present
+            import time
+            doc = OverrideDocument(settings=OverrideRequest(simulation={"kind": kind, "variant": variant}), created_at=time.time(), expires_at=None)
+            state = present(self.control.state_service.current(), doc)
+            self.assertTrue(state.control["active"])
+        self.assertEqual(self.control.state_service.current().mode.value, real_before["mode"])
+
     def test_frontend_no_unsafe_html(self):
         for js in (ROOT/'core/olympus_core/control/static').glob('*.js'):
             self.assertNotIn('innerHTML',js.read_text());self.assertNotIn('eval(',js.read_text())

@@ -35,7 +35,13 @@ weekend_start = "00:00"
 end = "07:30"
 weekend_days = ["friday", "saturday"]
 
+[media]
+local_stale_seconds = 15
+cloud_stale_seconds = 60
+
 [football]
+# Enable only after verifying the account subscription supports live scores.
+live_scores_confirmed = false
 enabled = false
 provider = "api-football"
 # Provider-specific FC Bayern IDs: API-Football = 157; football-data.org = 5.
@@ -84,6 +90,8 @@ ambient_limit = 3
 news_scene_seconds = 20
 major_scene_seconds = 45
 cooldown_minutes = 30
+global_cooldown_seconds = 300
+minimum_dwell_seconds = 10
 notable_threshold = 0.55
 important_threshold = 0.68
 major_threshold = 0.86

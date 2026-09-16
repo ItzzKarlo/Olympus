@@ -95,6 +95,7 @@ class Control:
         return redact(dict(release=asdict(release_info()), release_path=str(release_root().resolve()), core_uptime_seconds=int(time.monotonic() - self.started),
             local_time=datetime.now(ZoneInfo(self.settings.timezone)).isoformat(), night_schedule={k: str(v) for k, v in asdict(self.settings.night).items()},
             auto_night=real.time_policy.is_night, effective_night=presented.time_policy.is_night,
+            integration_health=self.state_service.integration_health(),
             real_scene=real.mode.value, scene=presented.mode.value, display_clients=self.hub.connection_count,
             kiosk_url="http://127.0.0.1:8000/ (default; installed kiosk.env may override)",
             overrides=doc.model_dump(mode="json") if doc else None,

@@ -38,7 +38,7 @@ export function MediaMode({ connectionStatus, media }: MediaModeProps) {
       <header className="scene__header media-header">
         <Brand />
         <div className="media-header__status">
-          <span className="media-live"><i aria-hidden="true" /> Spotify / Live</span>
+          <span className="media-live"><i aria-hidden="true" /> {media.provider}{media.device ? ` · ${media.device}` : ""}</span>
           <ConnectionStatus status={connectionStatus} />
         </div>
       </header>

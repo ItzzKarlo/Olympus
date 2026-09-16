@@ -13,6 +13,7 @@ from olympus_core.models.football import (
     FootballDisplayEvent,
     FootballEventType,
     FootballState,
+    FootballTeam,
     MatchdayContext,
     MatchPhase,
     ProviderFootballSnapshot,
@@ -60,14 +61,14 @@ class MatchdayPolicy:
             phase = match.status
             active = False
             if phase == MatchPhase.UPCOMING:
-                if current >= match.kickoff - timedelta(minutes=self._settings.matchday.pre_match_minutes):
+                if match.kickoff - timedelta(minutes=self._settings.matchday.pre_match_minutes) <= current <= match.kickoff + timedelta(hours=4):
                     phase = MatchPhase.PRE_MATCH
                     active = True
-            elif phase in {MatchPhase.LIVE, MatchPhase.HALF_TIME, MatchPhase.SUSPENDED}:
+            elif phase in {MatchPhase.LIVE, MatchPhase.HALF_TIME, MatchPhase.SUSPENDED} and abs((current - match.kickoff).total_seconds()) < 86400:
                 active = True
                 self._finished_match_id = None
                 self._finished_seen_at = None
-            elif phase == MatchPhase.FINISHED:
+            elif phase == MatchPhase.FINISHED and timedelta(0) <= current - match.kickoff <= timedelta(hours=4):
                 if self._finished_match_id != match.id:
                     self._finished_match_id = match.id
                     self._finished_seen_at = current
@@ -86,6 +87,10 @@ class MatchdayPolicy:
                     observed_at=snapshot.observed_at,
                 )
         return FootballState(
+            provider=snapshot.provider,
+            capabilities=snapshot.capabilities,
+            last_success_at=snapshot.observed_at,
+            provider_status="ok" if match or snapshot.next_match else "no_fixture",
             observed_at=snapshot.observed_at,
             tracked_team=snapshot.tracked_team,
             next_match=snapshot.next_match,
@@ -118,6 +123,9 @@ class FootballCollector:
         self._retry_after: float | None = None
         self._match_id: str | None = None
         self._phase: MatchPhase | None = None
+        self._recovering = False
+        self._failures = 0
+        self._last_score = None
         self._seen_event_ids: set[str] = set()
         self._lineup_available = False
         self._analytics = FootballAnalytics(settings)
@@ -170,13 +178,28 @@ class FootballCollector:
             self._lineup_available = False
             return
         phase = self._effective_phase(snapshot, state)
-        if self._match_id != match.id:
+        if self._match_id != match.id or self._recovering:
+            self._recovering = False
+            self._last_score = match.score
             self._match_id = match.id
             self._phase = phase
             self._seen_event_ids = {event.id for event in snapshot.events}
             self._lineup_available = snapshot.lineups is not None
             return
 
+        correction = self._last_score is not None and any(
+            before is not None and after is not None and after < before
+            for before, after in ((self._last_score.home, match.score.home), (self._last_score.away, match.score.away))
+        )
+        score_increased = self._last_score is not None and any(
+            before is not None and after is not None and after > before
+            for before, after in ((self._last_score.home, match.score.home), (self._last_score.away, match.score.away))
+        )
+        self._last_score = match.score
+        if correction:
+            self._seen_event_ids.update(event.id for event in snapshot.events)
+            await self._notify_event(FootballDisplayEvent(id=uuid4().hex, type="football.score.corrected",
+                timestamp=snapshot.observed_at, payload={"match_id": match.id, "score": match.score.model_dump()}))
         phase_event = PHASE_EVENT_TYPES.get((self._phase or MatchPhase.NONE, match.status))
         if phase_event is not None:
             await self._notify_event(FootballDisplayEvent(
@@ -191,6 +214,8 @@ class FootballCollector:
             if event.id in self._seen_event_ids:
                 continue
             self._seen_event_ids.add(event.id)
+            if event.type in {FootballEventType.GOAL, FootballEventType.OWN_GOAL, FootballEventType.PENALTY_GOAL} and not score_increased:
+                continue
             await self._notify_event(FootballDisplayEvent(
                 id=event.id,
                 type=FOOTBALL_EVENT_TYPES[event.type],
@@ -217,26 +242,36 @@ class FootballCollector:
             snapshot = await self._provider.fetch()
             state = self._policy.state(snapshot, now)
         except Exception as error:
+            self._recovering = True
+            self._failures = min(8, self._failures + 1)
             if isinstance(error, FootballRateLimitError):
                 self._retry_after = error.retry_after
             if tick - self._last_error_log_at >= 30:
-                logger.warning("Football provider temporarily unavailable: %s", error)
+                logger.warning("Football provider unavailable (%s)", type(error).__name__)
                 self._last_error_log_at = tick
             if self._last_good is None or self._last_success_at is None:
-                raise
+                return await self._publish(FootballState(available=False, stale=True,
+                    provider=self._settings.provider,
+                    provider_status="quota_exhausted" if isinstance(error, FootballRateLimitError) else getattr(error, "code", "provider_unavailable"),
+                    observed_at=now or datetime.now(timezone.utc),
+                    tracked_team=FootballTeam(id=self._settings.tracked_id, name=self._settings.team_name, short_name=self._settings.team_short_name)))
             age = tick - self._last_success_at
             live = self._last_good.matchday is not None and self._last_good.matchday.phase in {
                 MatchPhase.LIVE, MatchPhase.HALF_TIME, MatchPhase.SUSPENDED,
             }
             stale = age > (self._settings.live_stale_seconds if live else self._settings.poll_upcoming_seconds * 2)
             context = self._last_good.matchday.model_copy(update={"stale": stale}) if self._last_good.matchday else None
+            if age > self._settings.unavailable_seconds:
+                context = None
             return await self._publish(self._last_good.model_copy(update={
+                "provider_status": "quota_exhausted" if isinstance(error, FootballRateLimitError) else getattr(error, "code", "provider_unavailable"),
                 "available": age <= self._settings.unavailable_seconds,
                 "stale": stale,
                 "matchday": context,
             }))
 
         self._retry_after = None
+        self._failures = 0
         rating_changes: list[RatingChange] = []
         if state.matchday is not None:
             context, rating_changes = self._analytics.enrich(snapshot, state.matchday, tick)
@@ -255,6 +290,8 @@ class FootballCollector:
             if state.matchday is not None and state.matchday.phase == MatchPhase.POST_MATCH
             else self._minimum_poll_seconds
         )
+        if self._failures:
+            return max(self._retry_after or 0, minimum, min(900, self._settings.poll_pre_match_seconds * 2 ** (self._failures - 1)))
         if self._retry_after is not None:
             return max(
                 self._retry_after,

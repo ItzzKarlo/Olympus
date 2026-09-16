@@ -30,6 +30,7 @@ class NewsImportanceLevel(str, Enum):
 
 
 class NewsSource(BaseModel):
+    editorial_group: str | None = None
     id: str
     name: str
     language: str
@@ -83,6 +84,9 @@ class NewsFeedHealth(BaseModel):
     feed_id: str
     last_success_at: datetime | None = None
     last_error: str | None = None
+    last_article_at: datetime | None = None
+    consecutive_failures: int = 0
+    retry_at: datetime | None = None
     stale: bool = False
 
 
@@ -94,6 +98,7 @@ class NewsState(BaseModel):
     ambient: list[NewsCluster] = Field(default_factory=list)
     active_story: NewsCluster | None = None
     presentation: NewsPresentation | None = None
+    presentation_cooldown_until: datetime | None = None
     feed_health: list[NewsFeedHealth] = Field(default_factory=list)
 
 

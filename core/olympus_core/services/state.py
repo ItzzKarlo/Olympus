@@ -36,6 +36,7 @@ class StateService:
         alert_interruptions_enabled: bool = False,
     ) -> None:
         self.control_overrides = None
+        self.integration_health = lambda: {}
         self._registry = registry
         self._media = media or MediaStateStore()
         self._resolver = resolver or ModeResolver()
@@ -54,9 +55,9 @@ class StateService:
     def current(self) -> OlympusState:
         agents = self._registry.get_all()
         now = self._clock()
-        media = self._media.get()
+        media = self._media.get(agents, now)
         time_policy = self._time_policy.evaluate(now)
-        football = self._football.get()
+        football = self._football.get(now)
         news = self._news.get()
         resolution = self._resolver.resolve(
             agents,

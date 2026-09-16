@@ -42,10 +42,10 @@ class Simulation(StrictModel):
     @classmethod
     def variant_valid(cls, value, info):
         variants = {
-            "news": {"", "notable", "important", "major", "critical"},
+            "news": {"", "notable", "important", "major", "critical", "outage", "recovery"},
             "system": {"", "blocker", "warning", "critical", "dns-degraded", "dns-down", "gateway-down", "internet-down", "service-down", "agent-offline"},
-            "football": {"", "pre-match", "kickoff", "live", "bayern-goal", "opponent-goal", "halftime", "second-half", "full-time", "victory", "defeat", "draw"},
-            "media": {"", "playing", "paused"},
+            "football": {"", "pre-match", "kickoff", "live", "bayern-goal", "opponent-goal", "halftime", "second-half", "full-time", "victory", "defeat", "draw", "outage", "recovery", "score-correction"},
+            "media": {"", "playing", "paused", "local", "outage", "recovery"},
             "gaming": {"", "fortnite", "minecraft", "among-us", "goat-simulator", "custom"},
             "development": {"", "active"},
         }

@@ -28,6 +28,7 @@ function minuteLabel(event: FootballMatchEvent): string {
 }
 
 function clockLabel(context: MatchdayContext): string {
+  if (context.stale) return "STALE";
   if (context.phase === "half_time") return "HT";
   if (context.phase === "post_match" || context.phase === "finished") return "FT";
   if (context.phase === "suspended") return "SUSP";
@@ -144,6 +145,7 @@ function PreMatch({ context, now, timezone }: { context: MatchdayContext; now: D
 }
 
 function phaseSummary(context: MatchdayContext): string {
+  if (context.stale) return "Last known score · awaiting provider";
   if (context.phase === "half_time") return "Half-time analysis";
   if (context.phase === "post_match" || context.phase === "finished") {
     return context.result === "win" ? "Bayern win" : context.result === "loss" ? "Full-time summary" : context.result === "draw" ? "Match drawn" : "Full time";
@@ -172,7 +174,9 @@ function LiveMatch({ context }: { context: MatchdayContext }) {
 }
 
 export function MatchdayMode({ connectionStatus, now, state }: MatchdayModeProps) {
-  const context = state.football?.matchday;
+  const realContext = state.football?.matchday;
+  const context = realContext && state.football?.capabilities?.live_scores !== true && realContext.phase === "live"
+    ? { ...realContext, stale: true } : realContext;
   if (!context) return null;
   const preMatch = context.phase === "pre_match";
   return (

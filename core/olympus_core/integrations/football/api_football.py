@@ -1,3 +1,4 @@
+from olympus_core.models.football import FootballCapabilities
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 import time
@@ -69,7 +70,7 @@ class ApiFootballProvider:
 
     async def _get(self, path: str, params: dict[str, Any]) -> list[Any]:
         if not self._settings.api_key:
-            raise FootballProviderError("API-Football key is missing")
+            raise FootballProviderError("API-Football key is missing", "missing_credentials")
         try:
             response = await self._client.get(
                 f"{self.API_BASE}{path}",
@@ -87,7 +88,7 @@ class ApiFootballProvider:
                 retry_after = None
             raise FootballRateLimitError("API-Football rate limit reached", retry_after)
         if response.status_code in {401, 403}:
-            raise FootballProviderError(f"API-Football rejected credentials for {path}")
+            raise FootballProviderError("API-Football rejected access", "access_denied")
         if response.status_code >= 500:
             raise FootballProviderError(
                 f"API-Football upstream error {response.status_code} for {path}"
@@ -111,7 +112,8 @@ class ApiFootballProvider:
             if self._settings.api_key:
                 details = details.replace(self._settings.api_key, "[redacted]")
             raise FootballProviderError(
-                f"API-Football provider error for {path}: {details or 'unspecified error'}"
+                "API-Football provider rejected request",
+                "unsupported_season" if "season" in details.casefold() else "access_denied"
             )
         values = payload.get("response")
         if not isinstance(values, list):
@@ -119,6 +121,9 @@ class ApiFootballProvider:
         return values
 
     async def _refresh_schedule(self, now: datetime) -> None:
+        current_season = now.year if now.month >= 7 else now.year - 1
+        if self._settings.season is not None and self._settings.season < current_season:
+            raise FootballProviderError("Configured season is obsolete", "unsupported_season")
         local_day = now.astimezone(ZoneInfo(self._settings.timezone)).date()
         params: dict[str, Any] = {
             "team": self._settings.team_id,
@@ -139,8 +144,7 @@ class ApiFootballProvider:
         if (
             self._schedule_refreshed_at is None
             or (
-                self._active_fixture_id is None
-                and self._monotonic() - self._schedule_refreshed_at >= self._settings.poll_upcoming_seconds
+                self._monotonic() - self._schedule_refreshed_at >= self._settings.poll_upcoming_seconds
             )
         ):
             await self._refresh_schedule(now)
@@ -149,6 +153,7 @@ class ApiFootballProvider:
             match for value in self._schedule
             if (match := normalize_fixture(value, self._settings)) is not None
         ]
+        matches = [match for match in matches if now - timedelta(days=2) <= match.kickoff <= now + timedelta(days=90)]
         matches.sort(key=lambda match: match.kickoff)
         next_match = next(
             (match for match in matches if match.status == MatchPhase.UPCOMING and match.kickoff >= now),
@@ -187,8 +192,12 @@ class ApiFootballProvider:
             details = await self._get("/fixtures", {"id": active.id, "timezone": self._settings.timezone})
             detail = details[0] if details else None
             normalized = normalize_fixture(detail, self._settings)
+            if normalized is None:
+                raise FootballProviderError("API-Football fixture detail unavailable")
             if normalized is not None:
                 active = normalized
+                if normalized.status != MatchPhase.UPCOMING and next_match and next_match.id == normalized.id:
+                    next_match = None
                 if normalized.status == MatchPhase.UPCOMING:
                     next_match = normalized
                 self._active_fixture_id = normalized.id if normalized.status in {
@@ -208,6 +217,12 @@ class ApiFootballProvider:
                 code=self._settings.team_code,
             )
         return ProviderFootballSnapshot(
+            provider="api-football",
+            capabilities=FootballCapabilities(fixtures=True, current_season=bool(matches) or None,
+                live_scores=True if self._settings.live_scores_confirmed else None,
+                events=bool(isinstance(detail, Mapping) and detail.get("events")) or None,
+                lineups=bool(isinstance(detail, Mapping) and detail.get("lineups")) or None,
+                statistics=bool(isinstance(detail, Mapping) and detail.get("statistics")) or None),
             tracked_team=tracked_team,
             next_match=next_match,
             match=active,

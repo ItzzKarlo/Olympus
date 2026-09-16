@@ -42,6 +42,7 @@ def article(
     published_at: datetime = NOW,
     observed_at: datetime = NOW,
     topic: NewsTopic = NewsTopic.WORLD,
+    summary: str | None = None,
 ) -> NewsArticle:
     identity = identifier or f"{source.id}:{headline}"
     return NewsArticle(
@@ -50,13 +51,14 @@ def article(
         headline=headline,
         source=NewsSource(
             id=source.id, name=source.name, language=source.language,
-            trust=source.trust, region=source.region,
+            trust=source.trust, region=source.region, editorial_group=source.id,
         ),
         url=url or f"https://news.test/{source.id}/{abs(hash(identity))}",
         canonical_url=url or f"https://news.test/{source.id}/{abs(hash(identity))}",
         published_at=published_at,
         observed_at=observed_at,
         language=source.language,
+        summary=summary,
         topic=topic,
     )
 
@@ -172,7 +174,7 @@ class ClusteringAndImportanceTests(unittest.TestCase):
     def test_multi_source_local_breaking_story_can_be_major(self) -> None:
         headline = "Breaking emergency closes major rail network across Germany"
         state = NewsEngine(SETTINGS).update([
-            result(feed, article(feed, headline, identifier=feed.id, topic=NewsTopic.TRANSPORT))
+            result(feed, article(feed, headline, identifier=feed.id, topic=NewsTopic.TRANSPORT, summary=f"Independent reporting from {feed.id}"))
             for feed in FEEDS
         ], NOW)
         cluster = state.top_stories[0]
@@ -194,6 +196,7 @@ class ClusteringAndImportanceTests(unittest.TestCase):
                     article(
                         feeds[source_id],
                         fixture["headline"],
+                        summary=f"Independent reporting from {source_id}" if fixture.get("independent") else None,
                         identifier=f"{fixture['id']}:{source_id}",
                         published_at=published,
                         topic=NewsTopic(fixture["topic"]),
@@ -267,6 +270,7 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
             headline,
             published_at=self.now,
             observed_at=self.now,
+            summary=f"Independent reporting from {source.id}",
             **overrides,
         )
 
@@ -284,7 +288,7 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
         baseline = self.current_article(
             FEEDS[0], "Existing breaking emergency story", identifier="old"
         )
-        headline = "International leaders confirm broad emergency response plan"
+        headline = "International leaders confirm emergency evacuation across coastal region"
         additions = [
             self.current_article(feed, headline, identifier=feed.id, topic=NewsTopic.WORLD)
             for feed in FEEDS
@@ -316,6 +320,7 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
             SETTINGS.presentation,
             important_threshold=0.65,
             major_threshold=0.80,
+            minimum_dwell_seconds=0,
             news_scene_seconds=300,
             major_scene_seconds=900,
         ))
@@ -346,7 +351,7 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([event.type for event in events], ["news.story.important", "news.story.major"])
         collector.stop()
 
-    async def test_expired_presentation_does_not_suppress_new_equal_priority_story(self) -> None:
+    async def test_global_cooldown_suppresses_new_equal_priority_story(self) -> None:
         settings = replace(SETTINGS, presentation=replace(
             SETTINGS.presentation,
             important_threshold=0.65,
@@ -379,8 +384,8 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
         replacement = await collector.poll_once(self.now + timedelta(seconds=2))
 
         self.assertEqual(active.active_story.headline, first_title)
-        self.assertEqual(replacement.active_story.headline, second_title)
-        self.assertEqual(replacement.presentation.started_at, self.now + timedelta(seconds=2))
+        self.assertIsNone(replacement.active_story)
+        self.assertIsNone(replacement.presentation)
         collector.stop()
 
     async def test_presentation_memory_blocks_restart_repeat_but_allows_escalation(self) -> None:
@@ -388,6 +393,7 @@ class PresentationTests(unittest.IsolatedAsyncioTestCase):
             SETTINGS.presentation,
             important_threshold=0.65,
             major_threshold=0.80,
+            minimum_dwell_seconds=0,
             news_scene_seconds=30,
             major_scene_seconds=30,
         ))

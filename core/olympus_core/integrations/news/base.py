@@ -13,6 +13,7 @@ class NewsFeedResult:
     articles: list[NewsArticle] = field(default_factory=list)
     not_modified: bool = False
     error: str | None = None
+    retry_at: datetime | None = None
 
     @property
     def successful(self) -> bool:

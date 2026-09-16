@@ -31,23 +31,25 @@ class SpotifySettings:
     client_id: str | None
     client_secret: str | None
     refresh_token: str | None
-    poll_seconds: float = 5.0
-    active_poll_seconds: float = 1.5
+    poll_seconds: float = 15.0
+    active_poll_seconds: float = 5.0
     stale_seconds: float = 25.0
+    local_poll_seconds: float = 60.0
 
     @classmethod
     def from_environment(cls) -> "SpotifySettings":
         poll_seconds = _positive_float(
-            os.getenv("OLYMPUS_SPOTIFY_POLL_SECONDS"), 5.0
+            os.getenv("OLYMPUS_SPOTIFY_POLL_SECONDS"), 15.0
         )
         active_poll_seconds = _positive_float(
-            os.getenv("OLYMPUS_SPOTIFY_ACTIVE_POLL_SECONDS"), 1.5
+            os.getenv("OLYMPUS_SPOTIFY_ACTIVE_POLL_SECONDS"), 5.0
         )
         return cls(
             enabled=_enabled(os.getenv("OLYMPUS_SPOTIFY_ENABLED")),
             client_id=os.getenv("OLYMPUS_SPOTIFY_CLIENT_ID") or None,
             client_secret=os.getenv("OLYMPUS_SPOTIFY_CLIENT_SECRET") or None,
             refresh_token=os.getenv("OLYMPUS_SPOTIFY_REFRESH_TOKEN") or None,
+            local_poll_seconds=_positive_float(os.getenv("OLYMPUS_SPOTIFY_LOCAL_POLL_SECONDS"), 60.0),
             poll_seconds=poll_seconds,
             active_poll_seconds=active_poll_seconds,
             stale_seconds=max(20.0, poll_seconds * 4),
@@ -130,6 +132,7 @@ class FootballSettings:
     timezone: str = DEFAULT_TIMEZONE
     api_key: str | None = None
     football_data_api_key: str | None = None
+    live_scores_confirmed: bool = False
     fixture_path: str | None = None
     season: int | None = None
     matchday: FootballMatchdaySettings = FootballMatchdaySettings()
@@ -184,6 +187,7 @@ class NewsFeedSettings:
     trust: float = 1.0
     region: str | None = None
     topic: str | None = None
+    editorial_group: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,6 +196,8 @@ class NewsPresentationSettings:
     news_scene_seconds: float = 20.0
     major_scene_seconds: float = NEWS_PRESENTATION_MAX_SECONDS
     cooldown_seconds: float = 1_800.0
+    global_cooldown_seconds: float = 300.0
+    minimum_dwell_seconds: float = 10.0
     notable_threshold: float = 0.55
     important_threshold: float = 0.68
     major_threshold: float = 0.86
@@ -275,6 +281,12 @@ class SecuritySettings:
 
 
 @dataclass(frozen=True, slots=True)
+class MediaSettings:
+    local_stale_seconds: float = 15.0
+    cloud_stale_seconds: float = 60.0
+
+
+@dataclass(frozen=True, slots=True)
 class CoreSettings:
     timezone: str = DEFAULT_TIMEZONE
     server: ServerSettings = ServerSettings()
@@ -284,6 +296,7 @@ class CoreSettings:
     weather: WeatherSettings = WeatherSettings()
     calendar: CalendarSettings = CalendarSettings()
     night: NightSettings = NightSettings()
+    media: MediaSettings = MediaSettings()
     football: FootballSettings = FootballSettings()
     news: NewsSettings = NewsSettings()
     persistence: PersistenceSettings = PersistenceSettings()
@@ -430,6 +443,7 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
                 trust=_bounded_float(feed.get("trust"), 1.0, 0.1, 2.0),
                 region=str(feed.get("region", "")).strip().upper() or None,
                 topic=topic,
+                editorial_group=str(feed.get("editorial_group", "")).strip() or None,
             ))
     raw_regions = news_data.get("local_regions", ["DE"])
     local_regions = tuple(dict.fromkeys(
@@ -443,6 +457,10 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
 
     return CoreSettings(
         timezone=timezone,
+        media=MediaSettings(
+            local_stale_seconds=_positive_float(str(_mapping(data.get("media")).get("local_stale_seconds", 15)), 15),
+            cloud_stale_seconds=_positive_float(str(_mapping(data.get("media")).get("cloud_stale_seconds", 60)), 60),
+        ),
         server=ServerSettings(
             host=str(server_data.get("host", "127.0.0.1")).strip() or "127.0.0.1",
             port=min(_positive_int(server_data.get("port"), 8_000), 65_535),
@@ -495,6 +513,7 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
             weekend_days=_weekend_days(night_data.get("weekend_days")),
         ),
         football=FootballSettings(
+            live_scores_confirmed=football_data.get("live_scores_confirmed") is True,
             enabled=bool(football_data.get("enabled", False)),
             provider=football_provider,
             team_id=str(football_data.get("team_id", "157")).strip(),
@@ -606,6 +625,8 @@ def parse_core_config(data: dict[str, Any]) -> CoreSettings:
                         NEWS_PRESENTATION_MAX_SECONDS,
                     ),
                 ),
+                global_cooldown_seconds=_positive_float(str(news_presentation_data.get("global_cooldown_seconds", 300)), 300),
+                minimum_dwell_seconds=_positive_float(str(news_presentation_data.get("minimum_dwell_seconds", 10)), 10),
                 cooldown_seconds=_positive_float(
                     str(news_presentation_data.get("cooldown_minutes")) if news_presentation_data.get("cooldown_minutes") is not None else None,
                     30.0,

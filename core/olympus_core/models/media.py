@@ -38,7 +38,13 @@ class MediaQueueTrack(BaseModel):
 
 
 class MediaState(BaseModel):
-    provider: Literal["spotify"] = "spotify"
+    provider: str = Field(default="spotify", max_length=128)
+    source: Literal["cloud", "local"] = "cloud"
+    device: str | None = Field(default=None, max_length=255)
+    agent_id: str | None = None
+    session_id: str | None = Field(default=None, max_length=256)
+    playback_status: Literal["playing", "paused", "stopped", "unknown", "stale", "unavailable"] = "unknown"
+    capabilities: list[str] = Field(default_factory=list, max_length=16)
     available: bool = True
     is_playing: bool = False
     observed_at: datetime = Field(
@@ -51,4 +57,4 @@ class MediaState(BaseModel):
 
     @classmethod
     def unavailable(cls) -> "MediaState":
-        return cls(available=False)
+        return cls(available=False, playback_status="unavailable")

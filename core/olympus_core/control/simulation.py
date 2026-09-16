@@ -76,6 +76,20 @@ def present(real: OlympusState, doc: OverrideDocument) -> OlympusState:
                 events = [dict(id="control-goal", type="goal", minute=28, team=home if variant == "bayern-goal" else away, for_tracked_team=variant == "bayern-goal", score_after=score)]
             data["football"] = dict(observed_at=now.isoformat(), tracked_team=home, matchday=dict(active=True, phase=phase, tracked_team=home, match=match, events=events, observed_at=now.isoformat(), result="win" if variant == "victory" else "loss" if variant == "defeat" else "draw" if variant == "draw" else "unknown"))
             data["mode"] = "matchday"
+        if sim.kind == "media":
+            data["media"].update(source="local" if variant == "local" else "cloud",
+                device=sim.machine if variant == "local" else None,
+                playback_status="unavailable" if variant == "outage" else "paused" if variant == "paused" else "playing",
+                available=variant != "outage", is_playing=variant not in {"paused", "outage"})
+        elif sim.kind == "news" and variant in {"outage", "recovery"}:
+            data["news"].update(stale=variant == "outage", available=variant != "outage", active_story=None, presentation=None)
+            data["mode"] = real.mode.value
+        elif sim.kind == "football":
+            data["football"].update(provider="simulation", capabilities={"live_scores": True},
+                stale=variant == "outage", provider_status="provider_unavailable" if variant == "outage" else "ok")
+            data["football"]["matchday"]["stale"] = variant == "outage"
+            if variant == "score-correction":
+                data["football"]["matchday"]["match"]["score"] = {"home": 0, "away": 0}
     if settings.scene != "auto":
         data["mode"] = settings.scene
     # Real incidents retain precedence; previews cannot silently suppress them.

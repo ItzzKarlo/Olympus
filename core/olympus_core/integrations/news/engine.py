@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from hashlib import sha256
+from urllib.parse import urlsplit
 import math
 import re
 
@@ -47,7 +48,7 @@ def _same_story(left: NewsArticle, right: NewsArticle) -> bool:
     left_title = normalize_headline(left.headline)
     right_title = normalize_headline(right.headline)
     if left_title == right_title:
-        return True
+        return abs((left.published_at or left.observed_at) - (right.published_at or right.observed_at)) <= timedelta(hours=12)
     left_tokens, right_tokens = _tokens(left.headline), _tokens(right.headline)
     common = left_tokens & right_tokens
     union = left_tokens | right_tokens
@@ -85,7 +86,22 @@ def _importance(
     settings: NewsSettings,
     now: datetime,
 ) -> NewsImportance:
-    sources = {article.source.id: article.source for article in articles}
+    # Feed IDs are not independent reporting. Collapse publisher groups and
+    # identical wire copy (including summaries), conservatively, before scoring.
+    sources = {}
+    copies = set()
+    urls = set()
+    for article in articles:
+        copy = normalize_headline(article.headline + " " + (article.summary or ""))
+        wire = re.search(r"\b(reuters|associated press|afp|dpa)\b", (article.summary or "").casefold())
+        group = article.source.editorial_group or urlsplit(article.canonical_url).hostname or article.source.id
+        if wire:
+            group = wire.group(1)
+        if copy in copies or article.canonical_url in urls:
+            continue
+        copies.add(copy)
+        urls.add(article.canonical_url)
+        sources[group] = article.source
     latest = max((article.published_at or article.observed_at) for article in articles)
     age_hours = max(0.0, (now - latest).total_seconds() / 3_600)
     freshness = max(0.0, 1 - age_hours / 24)
@@ -132,9 +148,15 @@ def _importance(
     factors["age_decay_multiplier"] = age_decay
     score = min(1.0, max(0.0, raw_score))
     thresholds = settings.presentation
-    if score >= thresholds.major_threshold and len(sources) >= 3 and severity >= 0.22:
+    consequence = any(re.search(rf"\b{re.escape(term)}\b", corpus) for term in (
+        "evacuation", "evakuierung", "closes", "disruption", "sperrung", "waffenruhe", "ceasefire", "resigns", "rücktritt",
+    ))
+    dated = all(article.published_at is not None and article.published_at <= now + timedelta(minutes=5) for article in articles)
+    factors["independent_reports"] = float(len(sources))
+    factors["substantial_development"] = float(consequence and severity > 0)
+    if score >= thresholds.major_threshold and len(sources) >= 3 and severity >= 0.22 and consequence and dated:
         level = NewsImportanceLevel.MAJOR
-    elif score >= thresholds.important_threshold and len(sources) >= 2 and (severity > 0 or developing > 0):
+    elif score >= thresholds.important_threshold and len(sources) >= 2 and severity > 0 and consequence and dated:
         level = NewsImportanceLevel.IMPORTANT
     elif score >= thresholds.notable_threshold:
         level = NewsImportanceLevel.NOTABLE
@@ -143,7 +165,7 @@ def _importance(
 
     # Structured integrations and dedicated weather data remain authoritative.
     normalized = normalize_headline(corpus)
-    if topic == NewsTopic.SPORTS and any(value in normalized for value in ("bayern", "fc bayern")):
+    if topic in {NewsTopic.SPORTS, NewsTopic.ENTERTAINMENT}:
         level = min(level, NewsImportanceLevel.NOTABLE, key=lambda value: list(NewsImportanceLevel).index(value))
     if topic == NewsTopic.WEATHER and severity == 0:
         level = min(level, NewsImportanceLevel.NOTABLE, key=lambda value: list(NewsImportanceLevel).index(value))
@@ -226,16 +248,26 @@ class NewsEngine:
                     "last_success_at": result.observed_at,
                     "last_error": None,
                     "stale": False,
+                    "consecutive_failures": 0,
+                    "retry_at": None,
+                    "last_article_at": max((a.published_at for a in result.articles if a.published_at and a.published_at <= current), default=health.last_article_at),
                 })
                 for article in result.articles:
+                    existing = self._articles.get(article.id)
+                    if existing is not None:
+                        article = article.model_copy(update={"observed_at": existing.observed_at})
                     self._articles[article.id] = article
             else:
                 last_success = health.last_success_at
                 self._health[result.feed.id] = health.model_copy(update={
                     "last_error": result.error,
+                    "retry_at": result.retry_at,
+                    "consecutive_failures": health.consecutive_failures + 1,
                     "stale": last_success is None or current - last_success > timedelta(seconds=self._settings.stale_seconds),
                 })
 
+        for key, health in self._health.items():
+            self._health[key] = health.model_copy(update={"stale": health.last_success_at is None or (current - health.last_success_at).total_seconds() > self._settings.stale_seconds})
         cutoff = current - timedelta(seconds=self._settings.retention_seconds)
         self._articles = {
             identifier: article for identifier, article in self._articles.items()

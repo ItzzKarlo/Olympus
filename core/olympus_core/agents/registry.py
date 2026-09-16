@@ -50,6 +50,8 @@ class AgentRegistry:
         if connection_id is not None and self._connection_ids.get(agent_id) != connection_id:
             return agent
 
+        agent.media_sessions = telemetry.media_sessions
+        agent.media_health = telemetry.media_health
         agent.system = telemetry.system
         agent.storage = telemetry.storage
         agent.network = telemetry.network

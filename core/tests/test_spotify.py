@@ -196,8 +196,8 @@ class SpotifySettingsTests(unittest.TestCase):
     def test_active_poll_default_targets_near_real_time_without_changing_inactive_poll(self) -> None:
         with patch.dict("os.environ", {}, clear=True):
             settings = SpotifySettings.from_environment()
-        self.assertEqual(settings.active_poll_seconds, 1.5)
-        self.assertEqual(settings.poll_seconds, 5.0)
+        self.assertEqual(settings.active_poll_seconds, 5.0)
+        self.assertEqual(settings.poll_seconds, 15.0)
 
 
 class FakeGateway:

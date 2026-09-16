@@ -178,7 +178,10 @@ export interface MediaQueueTrack {
 }
 
 export interface MediaState {
-  provider: "spotify";
+  provider: string;
+  source?: "cloud" | "local";
+  device?: string | null;
+  playback_status?: string;
   available: boolean;
   is_playing: boolean;
   observed_at: string;
@@ -417,6 +420,8 @@ export interface MatchdayContext {
 }
 
 export interface FootballState {
+  capabilities?: { live_scores: boolean | null };
+  provider_status?: string;
   available: boolean;
   stale: boolean;
   observed_at: string;

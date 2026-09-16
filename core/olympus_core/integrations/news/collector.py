@@ -30,8 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 def cluster_fingerprint(cluster: NewsCluster) -> str:
-    tokens = sorted(set(normalize_headline(cluster.headline).split()))
-    identity = f"{cluster.topic.value}\0{' '.join(tokens)}"
+    identity = cluster.id
     return sha256(identity.encode("utf-8")).hexdigest()
 
 
@@ -53,6 +52,7 @@ class NewsCollector:
         self._engine = NewsEngine(settings)
         self._state = NewsState(available=False)
         self._baseline_established = False
+        self._last_presentation_at: datetime | None = None
         self._known_levels: dict[str, NewsImportanceLevel] = {}
         self._presented: dict[str, tuple[NewsImportanceLevel, datetime]] = {}
         self._memory = memory
@@ -96,6 +96,9 @@ class NewsCollector:
 
     def _candidate(self, escalations: list[NewsCluster], now: datetime) -> NewsCluster | None:
         eligible: list[NewsCluster] = []
+        if self._last_presentation_at is not None and (now - self._last_presentation_at).total_seconds() < self._settings.presentation.global_cooldown_seconds:
+            # Only an escalation of the currently presented story may preempt.
+            escalations = [c for c in escalations if self._state.presentation is not None and c.id == self._state.presentation.story_id and LEVEL_RANK[c.importance.level] > LEVEL_RANK[self._state.presentation.level]]
         for cluster in escalations:
             level = cluster.importance.level
             if LEVEL_RANK[level] < LEVEL_RANK[NewsImportanceLevel.IMPORTANT]:
@@ -135,6 +138,8 @@ class NewsCollector:
         schedule_expiry: bool,
     ) -> NewsState:
         current = state.presentation
+        if current is not None and (now - current.started_at).total_seconds() < self._settings.presentation.minimum_dwell_seconds:
+            return state
         if current is not None and LEVEL_RANK[current.level] >= LEVEL_RANK[cluster.importance.level]:
             return state
         configured_seconds = (
@@ -149,6 +154,7 @@ class NewsCollector:
             started_at=now,
             ends_at=now + timedelta(seconds=seconds),
         )
+        self._last_presentation_at = now
         fingerprint = cluster_fingerprint(cluster)
         self._presented[fingerprint] = (cluster.importance.level, now)
         if self._memory is not None:
@@ -171,7 +177,11 @@ class NewsCollector:
         async with self._lock:
             state = self._engine.update(results, current)
             escalations = self._escalations(state.top_stories) if self._baseline_established else []
-            candidate = self._candidate(escalations, current)
+            self._presented = dict(sorted(
+                ((key, value) for key, value in self._presented.items() if current - value[1] < timedelta(days=7)),
+                key=lambda item: item[1][1],
+            )[-512:])
+            candidate = self._candidate(escalations, current) if state.available and not state.stale else None
             if self._state.presentation is not None and self._state.presentation.ends_at > current:
                 active = next(
                     (cluster for cluster in state.top_stories if cluster.id == self._state.presentation.story_id),
@@ -188,6 +198,8 @@ class NewsCollector:
                     state,
                     schedule_expiry=schedule_expiry,
                 )
+            if self._last_presentation_at is not None:
+                state = state.model_copy(update={"presentation_cooldown_until": self._last_presentation_at + timedelta(seconds=self._settings.presentation.global_cooldown_seconds)})
             await self._publish(state)
             for cluster in escalations:
                 await self._notify(cluster, current)

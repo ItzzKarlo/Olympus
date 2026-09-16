@@ -2,6 +2,8 @@ import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime, timezone
 import logging
+import math
+from email.utils import parsedate_to_datetime
 import time
 from typing import Any, Protocol
 
@@ -23,9 +25,11 @@ JsonObject = Mapping[str, Any]
 
 
 class SpotifyError(RuntimeError):
-    def __init__(self, message: str, status_code: int | None = None) -> None:
+    def __init__(self, message: str, status_code: int | None = None, retry_after: float | None = None, kind: str = "unavailable") -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.retry_after = retry_after
+        self.kind = kind
 
 
 def _object(value: Any) -> JsonObject:
@@ -148,6 +152,43 @@ class SpotifyApi:
         self._access_token: str | None = None
         self._access_token_expires_at = 0.0
         self._context_cache: dict[str, str] = {}
+        self._blocked_until = 0.0
+        self._blocked_status: int | None = None
+        self._endpoint_backoff: dict[str, tuple[float, int]] = {}
+
+    def _check_response(self, response: httpx.Response, endpoint: str, path: str | None = None) -> None:
+        status = response.status_code
+        if status < 300:
+            return
+        retry = None
+        if status == 429:
+            raw = response.headers.get("Retry-After", "60")
+            try:
+                retry = float(raw)
+            except ValueError:
+                try:
+                    retry = (parsedate_to_datetime(raw) - datetime.now(timezone.utc)).total_seconds()
+                except (ValueError, TypeError, OverflowError):
+                    retry = 60.0
+            retry = max(1.0, retry) if math.isfinite(retry) else 60.0
+        elif status in {400, 401, 403} or 300 <= status < 400:
+            retry = 300.0
+        elif status >= 500:
+            retry = 30.0
+        if retry is not None:
+            if path is None or status == 429:
+                self._blocked_until = time.monotonic() + retry
+                self._blocked_status = status
+            else:
+                if len(self._endpoint_backoff) >= 128:
+                    self._endpoint_backoff.pop(next(iter(self._endpoint_backoff)))
+                self._endpoint_backoff[path] = (time.monotonic() + retry, status)
+        outcome = "unexpected redirect" if status < 400 else {
+            400: "credentials rejected", 401: "unauthorized", 403: "forbidden", 429: "rate limited",
+        }.get(status, "upstream error" if status >= 500 else "request rejected")
+        # Never include response bodies, URLs, Location, or authentication headers.
+        raise SpotifyError(f"Spotify {endpoint}: {outcome}", status, retry)
+
 
     async def aclose(self) -> None:
         if self._owns_client:
@@ -164,17 +205,15 @@ class SpotifyApi:
                     "refresh_token": self._settings.refresh_token,
                 },
                 auth=(self._settings.client_id, self._settings.client_secret),
+                follow_redirects=False,
             )
         except httpx.HTTPError as exc:
-            raise SpotifyError("Spotify authentication is unavailable") from exc
-        if response.status_code >= 400:
-            raise SpotifyError(
-                "Spotify authentication failed", response.status_code
-            )
+            raise SpotifyError("Spotify authentication is unavailable", kind="timeout" if isinstance(exc, httpx.TimeoutException) else "network_error") from exc
+        self._check_response(response, "authentication")
         try:
             payload = response.json()
         except ValueError as exc:
-            raise SpotifyError("Spotify authentication returned invalid JSON") from exc
+            raise SpotifyError("Spotify authentication returned invalid JSON", kind="invalid_json") from exc
         token = _text(_object(payload).get("access_token"))
         if token is None:
             raise SpotifyError("Spotify authentication response had no access token")
@@ -190,6 +229,11 @@ class SpotifyApi:
         allow_empty: bool = False,
         retry_auth: bool = True,
     ) -> JsonObject | None:
+        if time.monotonic() < self._blocked_until:
+            raise SpotifyError("Spotify retry deferred", self._blocked_status, retry_after=self._blocked_until - time.monotonic())
+        deadline, status = self._endpoint_backoff.get(path, (0.0, 0))
+        if time.monotonic() < deadline:
+            raise SpotifyError("Spotify endpoint retry deferred", status, retry_after=deadline - time.monotonic())
         if (
             self._access_token is None
             or time.monotonic() >= self._access_token_expires_at
@@ -200,9 +244,10 @@ class SpotifyApi:
             response = await self._client.get(
                 f"{self.API_BASE}{path}",
                 headers={"Authorization": f"Bearer {self._access_token}"},
+                follow_redirects=False,
             )
         except httpx.HTTPError as exc:
-            raise SpotifyError("Spotify API is temporarily unavailable") from exc
+            raise SpotifyError("Spotify API is temporarily unavailable", kind="timeout" if isinstance(exc, httpx.TimeoutException) else "network_error") from exc
 
         if response.status_code == 401 and retry_auth:
             self._access_token = None
@@ -212,14 +257,11 @@ class SpotifyApi:
             )
         if response.status_code == 204 and allow_empty:
             return None
-        if response.status_code >= 400:
-            raise SpotifyError(
-                "Spotify API request failed", response.status_code
-            )
+        self._check_response(response, "playback", path)
         try:
             value = response.json()
         except ValueError as exc:
-            raise SpotifyError("Spotify API returned invalid JSON") from exc
+            raise SpotifyError("Spotify API returned invalid JSON", kind="invalid_json") from exc
         if not isinstance(value, Mapping):
             raise SpotifyError("Spotify API returned an invalid response")
         return value
@@ -243,6 +285,8 @@ class SpotifyApi:
                 # Context names are enriching metadata; playback itself should survive.
                 name = None
             if name is not None and uri is not None:
+                if len(self._context_cache) >= 128:
+                    self._context_cache.pop(next(iter(self._context_cache)))
                 self._context_cache[uri] = name
 
         return MediaContext(type=context_type, name=name, uri=uri)
@@ -251,13 +295,16 @@ class SpotifyApi:
         playback = await self._request("/me/player", allow_empty=True)
         observed_at = datetime.now(timezone.utc)
         if playback is None:
-            return MediaState(observed_at=observed_at)
+            return MediaState(observed_at=observed_at, playback_status="stopped")
 
         track = normalize_track(playback.get("item"))
         context = await self._resolve_context(playback.get("context"))
         queue: list[MediaQueueTrack] = []
         if track is not None:
-            queue_payload = await self._request("/me/player/queue")
+            try:
+                queue_payload = await self._request("/me/player/queue")
+            except SpotifyError:
+                queue_payload = None
             seen = {_current_track_identity(track)}
             for item in _list(_object(queue_payload).get("queue")):
                 normalized = normalize_queue_track(item)
@@ -273,6 +320,8 @@ class SpotifyApi:
 
         return MediaState(
             is_playing=bool(playback.get("is_playing")),
+            playback_status="playing" if playback.get("is_playing") else "paused" if track else "stopped",
+            device=_text(_object(playback.get("device")).get("name")),
             observed_at=observed_at,
             progress_ms=_integer(playback.get("progress_ms")),
             track=track,
@@ -287,8 +336,10 @@ class SpotifyCollector:
         settings: SpotifySettings,
         gateway: SpotifyGateway,
         on_update: Callable[[MediaState], Awaitable[None]],
+        local_playing: Callable[[], bool] | None = None,
     ) -> None:
         self._settings = settings
+        self._local_playing = local_playing or (lambda: False)
         self._gateway = gateway
         self._on_update = on_update
         self._stop = asyncio.Event()
@@ -297,6 +348,8 @@ class SpotifyCollector:
         self._was_playing = False
         self._last_error_log_at = 0.0
         self._consecutive_failures = 0
+        self._retry_after = 0.0
+        self.health = "unknown"
 
     async def poll_once(self, now: float | None = None) -> MediaState:
         current_time = time.monotonic() if now is None else now
@@ -304,8 +357,10 @@ class SpotifyCollector:
             state = await self._gateway.fetch_state()
         except Exception as exc:
             self._consecutive_failures += 1
+            self._retry_after = exc.retry_after or 0.0 if isinstance(exc, SpotifyError) else 0.0
+            self.health = f"http_{exc.status_code}" if isinstance(exc, SpotifyError) and exc.status_code else exc.kind if isinstance(exc, SpotifyError) else "unavailable"
             if current_time - self._last_error_log_at >= 30:
-                logger.warning("Spotify API temporarily unavailable: %s", exc)
+                logger.warning("Spotify unavailable (%s)", self.health)
                 self._last_error_log_at = current_time
             if (
                 self._last_good_state is not None
@@ -318,6 +373,8 @@ class SpotifyCollector:
             await self._on_update(unavailable)
             return unavailable
 
+        self.health = "playing" if state.is_playing else "inactive"
+        self._retry_after = 0.0
         self._last_good_state = state
         self._last_success_at = current_time
         self._consecutive_failures = 0
@@ -334,11 +391,14 @@ class SpotifyCollector:
         if self._consecutive_failures:
             return max(
                 self._settings.poll_seconds,
+                self._retry_after,
                 min(
-                    60.0,
-                    self._settings.poll_seconds * (2 ** (self._consecutive_failures - 1)),
+                    300.0,
+                    self._settings.poll_seconds * (2 ** min(8, self._consecutive_failures - 1)),
                 ),
             )
+        if self._local_playing():
+            return self._settings.local_poll_seconds
         return (
             self._settings.active_poll_seconds
             if state.available and state.is_playing
