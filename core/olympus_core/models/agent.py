@@ -1,3 +1,5 @@
+from olympus_core.models.media import MediaState
+
 from datetime import datetime
 from typing import Literal
 
@@ -48,6 +50,8 @@ class AgentWelcome(BaseModel):
 
 
 class RegisteredAgent(BaseModel):
+    media_sessions: list[MediaState] = Field(default_factory=list, max_length=16)
+    media_health: str = Field(default="unsupported", max_length=64)
     agent_id: str
     hostname: str
     platform: str

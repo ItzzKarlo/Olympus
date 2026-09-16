@@ -31,23 +31,25 @@ class SpotifySettings:
     client_id: str | None
     client_secret: str | None
     refresh_token: str | None
-    poll_seconds: float = 5.0
-    active_poll_seconds: float = 1.5
+    poll_seconds: float = 15.0
+    active_poll_seconds: float = 5.0
     stale_seconds: float = 25.0
+    local_poll_seconds: float = 60.0
 
     @classmethod
     def from_environment(cls) -> "SpotifySettings":
         poll_seconds = _positive_float(
-            os.getenv("OLYMPUS_SPOTIFY_POLL_SECONDS"), 5.0
+            os.getenv("OLYMPUS_SPOTIFY_POLL_SECONDS"), 15.0
         )
         active_poll_seconds = _positive_float(
-            os.getenv("OLYMPUS_SPOTIFY_ACTIVE_POLL_SECONDS"), 1.5
+            os.getenv("OLYMPUS_SPOTIFY_ACTIVE_POLL_SECONDS"), 5.0
         )
         return cls(
             enabled=_enabled(os.getenv("OLYMPUS_SPOTIFY_ENABLED")),
             client_id=os.getenv("OLYMPUS_SPOTIFY_CLIENT_ID") or None,
             client_secret=os.getenv("OLYMPUS_SPOTIFY_CLIENT_SECRET") or None,
             refresh_token=os.getenv("OLYMPUS_SPOTIFY_REFRESH_TOKEN") or None,
+            local_poll_seconds=_positive_float(os.getenv("OLYMPUS_SPOTIFY_LOCAL_POLL_SECONDS"), 60.0),
             poll_seconds=poll_seconds,
             active_poll_seconds=active_poll_seconds,
             stale_seconds=max(20.0, poll_seconds * 4),

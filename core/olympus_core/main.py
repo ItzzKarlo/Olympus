@@ -200,6 +200,7 @@ async def lifespan(_app: FastAPI):
             settings,
             SpotifyApi(settings),
             update_media_state,
+            local_playing=lambda: bool((state := media_store.get(registry.get_all())) and state.source == "local" and state.is_playing),
         )
         collector_task = asyncio.create_task(
             collector.run(), name="spotify-collector"

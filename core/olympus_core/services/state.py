@@ -54,7 +54,7 @@ class StateService:
     def current(self) -> OlympusState:
         agents = self._registry.get_all()
         now = self._clock()
-        media = self._media.get()
+        media = self._media.get(agents, now)
         time_policy = self._time_policy.evaluate(now)
         football = self._football.get()
         news = self._news.get()

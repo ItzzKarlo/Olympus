@@ -8,6 +8,7 @@ from typing import Any
 
 from websockets.asyncio.client import connect
 
+from olympus_agent_common.media import LocalMediaCollector
 from olympus_agent_common.config import AgentConfig
 from olympus_agent_common.identity import DeviceKey, load_or_create_agent_id, load_or_create_device_key
 from olympus_agent_common.integrations import LocalIntegrationServer
@@ -105,6 +106,7 @@ async def run_connection(
         forward_task = asyncio.create_task(
             forward_integrations(), name="olympus-integration-forwarder"
         )
+        media = LocalMediaCollector()
         previous_mode: str | None = None
         try:
             while stop is None or not stop.is_set():
@@ -122,6 +124,8 @@ async def run_connection(
                     continue
                 if integrations is not None:
                     telemetry["integrations"] = integrations.snapshot()
+                telemetry["media_sessions"] = await media.sample()
+                telemetry["media_health"] = media.health
                 await send(telemetry)
                 mode = telemetry["activity"]["mode"]
                 if mode != previous_mode:
@@ -135,6 +139,7 @@ async def run_connection(
                     except TimeoutError:
                         pass
         finally:
+            media.close()
             forward_task.cancel()
             await asyncio.gather(forward_task, return_exceptions=True)
 

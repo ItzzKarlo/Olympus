@@ -178,7 +178,10 @@ export interface MediaQueueTrack {
 }
 
 export interface MediaState {
-  provider: "spotify";
+  provider: string;
+  source?: "cloud" | "local";
+  device?: string | null;
+  playback_status?: string;
   available: boolean;
   is_playing: boolean;
   observed_at: string;

@@ -1,3 +1,4 @@
+from olympus_core.models.media import MediaState
 from enum import Enum
 from typing import Literal
 
@@ -61,6 +62,8 @@ class ActivityTelemetry(BaseModel):
     game: GameInfo | None = None
     fps: float | None = Field(default=None, gt=0)
 class AgentTelemetry(BaseModel):
+    media_sessions: list[MediaState] = Field(default_factory=list, max_length=16)
+    media_health: str = Field(default="unsupported", max_length=64)
     type: Literal["telemetry"]
     system: SystemTelemetry
     storage: StorageTelemetry | None = None
