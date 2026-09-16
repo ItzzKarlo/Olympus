@@ -153,8 +153,10 @@ class SpotifyApi:
         self._access_token_expires_at = 0.0
         self._context_cache: dict[str, str] = {}
         self._blocked_until = 0.0
+        self._blocked_status: int | None = None
+        self._endpoint_backoff: dict[str, tuple[float, int]] = {}
 
-    def _check_response(self, response: httpx.Response, endpoint: str) -> None:
+    def _check_response(self, response: httpx.Response, endpoint: str, path: str | None = None) -> None:
         status = response.status_code
         if status < 300:
             return
@@ -171,8 +173,16 @@ class SpotifyApi:
             retry = max(1.0, retry) if math.isfinite(retry) else 60.0
         elif status in {400, 401, 403} or 300 <= status < 400:
             retry = 300.0
+        elif status >= 500:
+            retry = 30.0
         if retry is not None:
-            self._blocked_until = time.monotonic() + retry
+            if path is None or status == 429:
+                self._blocked_until = time.monotonic() + retry
+                self._blocked_status = status
+            else:
+                if len(self._endpoint_backoff) >= 128:
+                    self._endpoint_backoff.pop(next(iter(self._endpoint_backoff)))
+                self._endpoint_backoff[path] = (time.monotonic() + retry, status)
         outcome = "unexpected redirect" if status < 400 else {
             400: "credentials rejected", 401: "unauthorized", 403: "forbidden", 429: "rate limited",
         }.get(status, "upstream error" if status >= 500 else "request rejected")
@@ -220,7 +230,10 @@ class SpotifyApi:
         retry_auth: bool = True,
     ) -> JsonObject | None:
         if time.monotonic() < self._blocked_until:
-            raise SpotifyError("Spotify retry deferred", retry_after=self._blocked_until - time.monotonic())
+            raise SpotifyError("Spotify retry deferred", self._blocked_status, retry_after=self._blocked_until - time.monotonic())
+        deadline, status = self._endpoint_backoff.get(path, (0.0, 0))
+        if time.monotonic() < deadline:
+            raise SpotifyError("Spotify endpoint retry deferred", status, retry_after=deadline - time.monotonic())
         if (
             self._access_token is None
             or time.monotonic() >= self._access_token_expires_at
@@ -244,7 +257,7 @@ class SpotifyApi:
             )
         if response.status_code == 204 and allow_empty:
             return None
-        self._check_response(response, "playback")
+        self._check_response(response, "playback", path)
         try:
             value = response.json()
         except ValueError as exc:

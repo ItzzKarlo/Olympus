@@ -39,14 +39,19 @@ class CloudFailures(unittest.IsolatedAsyncioTestCase):
                 await SpotifyApi(SETTINGS, client).fetch_state()
 
     async def test_queue_failure_preserves_playback(self):
+        queue_calls = []
         def handler(request):
             if request.url.host == 'accounts.spotify.com':
                 return httpx.Response(200, json={'access_token': 'token'})
             if request.url.path.endswith('/queue'):
+                queue_calls.append(request)
                 return httpx.Response(403)
             return httpx.Response(200, json={'is_playing': True, 'item': {'name': 'Track'}})
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            state = await SpotifyApi(SETTINGS, client).fetch_state()
+            api = SpotifyApi(SETTINGS, client)
+            state = await api.fetch_state()
+            self.assertTrue((await api.fetch_state()).is_playing)
+            self.assertEqual(len(queue_calls), 1)
             self.assertTrue(state.is_playing)
             self.assertEqual(state.track.title, 'Track')
 
